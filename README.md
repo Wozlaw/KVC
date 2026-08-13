@@ -58,9 +58,13 @@ GET /health
 ```powershell
 python -m pip check
 python -m pytest
+python -m pytest -W error
 python -m ruff format --check .
 python -m ruff check .
 python -m mypy src
 git diff --check
 ```
 
+## PostgreSQL
+
+Persistence infrastructure targets PostgreSQL through SQLAlchemy async APIs and `asyncpg`. Set `KVC_DATABASE_URL` in local `.env` or environment variables before running database checks or Alembic online commands. `/health` remains a process liveness check and does not require a database connection.

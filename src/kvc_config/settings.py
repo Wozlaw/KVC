@@ -1,9 +1,12 @@
 """Application settings."""
 
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+AppEnvironment = Literal["development", "test", "production"]
 
 
 class AppSettings(BaseSettings):
@@ -17,17 +20,17 @@ class AppSettings(BaseSettings):
     )
 
     service_name: str = "Kaiten Voice Control"
-    env: str = "development"
+    app_env: AppEnvironment = "development"
     log_level: str = "INFO"
-    database_url: str = ""
-    max_bot_token: SecretStr | None = None
-    max_webhook_secret: SecretStr | None = None
-    kaiten_api_token: SecretStr | None = None
-    gigachat_credentials: SecretStr | None = None
-    gigachat_model: str = "GigaChat-Pro"
-    stt_provider: str = ""
-    salutespeech_auth_key: SecretStr | None = None
-    token_encryption_key: SecretStr | None = Field(default=None)
+    database_url: SecretStr | None = None
+    database_echo: bool = False
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_blank_database_url(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
 
 
 @lru_cache
