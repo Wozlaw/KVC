@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kaiten-voice-control"
+version = "0.1.0"
+description = "Infrastructure bootstrap for Kaiten Voice Control."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi",
+  "hypercorn",
+  "pydantic>=2",
+  "pydantic-settings",
+  "httpx",
+  "sqlalchemy>=2",
+  "alembic",
+  "asyncpg",
+  "cryptography",
+  "python-multipart",
+  "gigachat",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx2",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "ruff",
+  "mypy",
+]
+
+[project.scripts]
+kvc-worker = "kvc_worker.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+  "--strict-config",
+  "--strict-markers",
+  "--cov=src",
+  "--cov-report=term-missing",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = [
+  "kvc_api",
+  "kvc_worker",
+  "kvc_domain",
+  "kvc_application",
+  "kvc_persistence",
+  "kvc_notifications",
+  "kvc_config",
+  "kvc_integrations",
+]
