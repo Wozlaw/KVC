@@ -15,12 +15,14 @@ from kvc_api.max.response_text import (
     DISABLE_MISSING_TEXT,
     DISABLE_SUCCESS_TEXT,
     HELP_TEXT,
-    NOTIFICATIONS_LATER_TEXT,
+    NOTIFICATIONS_OPEN_LABEL,
+    NOTIFICATIONS_OPEN_TEXT,
     RECONNECT_MISSING_TEXT,
     USER_DISABLED_TEXT,
 )
 from kvc_api.max.service_commands import (
     CONNECT_CONTEXT_TTL_SECONDS,
+    NOTIFICATIONS_CONTEXT_TTL_SECONDS,
     ServiceCommandContext,
     ServiceCommandHandler,
 )
@@ -109,7 +111,7 @@ async def test_help_lists_only_current_commands() -> None:
     action = await handler().handle(context(MaxServiceCommand.HELP, identity()))
 
     assert action.text == HELP_TEXT
-    assert "/notifications" not in action.text
+    assert "/notifications" in action.text
     assert "/cards" not in action.text
     assert len(action.text) < 4000
 
@@ -265,10 +267,26 @@ async def test_disabled_kvc_user_matrix_for_non_launch_commands(command: MaxServ
 
 
 @pytest.mark.asyncio
-async def test_notifications_remains_provisional() -> None:
+async def test_notifications_active_user_issues_bound_max_safe_context() -> None:
     action = await handler().handle(context(MaxServiceCommand.NOTIFICATIONS, identity()))
+    signer = MiniAppContextSigner(SECRET)
+    binding = signer.make_identity_binding(max_user_id=MAX_USER_ID, chat_id=MAX_CHAT_ID)
 
-    assert action.text == NOTIFICATIONS_LATER_TEXT
+    assert action.kind == "open_app"
+    assert action.text == NOTIFICATIONS_OPEN_TEXT
+    assert action.label == NOTIFICATIONS_OPEN_LABEL
+    assert action.app_path == "/max/app/notifications"
+    assert action.context_ref is not None
+    assert MAX_STARTAPP_RE.fullmatch(action.context_ref)
+    assert "." not in action.context_ref
+    assert len(action.context_ref) <= 512
+    claims = signer.verify(
+        action.context_ref,
+        expected_purpose=MiniAppContextPurpose.NOTIFICATION_SETTINGS,
+        expected_identity_binding=binding,
+        now=NOW,
+    )
+    assert claims.expires_at - claims.issued_at == NOTIFICATIONS_CONTEXT_TTL_SECONDS
 
 
 @pytest.mark.parametrize(

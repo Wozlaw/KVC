@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -16,7 +17,9 @@ from kvc_application.dto import (
     BindKaitenConnectionInput,
     IdentityResolution,
     KaitenConnectionResult,
+    NotificationSettingsResult,
     ResolveMaxIdentityInput,
+    UpdateNotificationSettingsInput,
 )
 from kvc_application.services import IdentityService, KaitenConnectionService
 from kvc_config import AppSettings
@@ -69,6 +72,17 @@ class MaxMessageConfirmationSender(Protocol):
     ) -> object: ...
 
 
+class NotificationSettingsManager(Protocol):
+    """Notification settings service contract for MAX Mini App routes."""
+
+    async def get_settings(self, user_id: UUID) -> NotificationSettingsResult: ...
+
+    async def update_settings(
+        self,
+        input: UpdateNotificationSettingsInput,
+    ) -> NotificationSettingsResult: ...
+
+
 @dataclass(frozen=True)
 class MaxMiniAppRuntime:
     """Request-scoped service factories for MAX Mini App routes."""
@@ -77,6 +91,7 @@ class MaxMiniAppRuntime:
     kaiten_connection_binder_factory: Callable[[], KaitenConnectionBinder]
     message_sender: MaxMessageConfirmationSender
     context_signer: MiniAppContextSigner
+    notification_settings_service_factory: Callable[[], NotificationSettingsManager] | None = None
 
 
 def build_max_dispatcher(

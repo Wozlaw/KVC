@@ -11,7 +11,9 @@ from kvc_application.dto import (
     KaitenCredentialVerification,
     MarkKaitenNeedsReauthInput,
     MaxChatType,
+    NotificationSettingsResult,
     ResolveMaxIdentityInput,
+    UpdateNotificationSettingsInput,
     UserStatus,
 )
 from kvc_application.errors import (
@@ -19,6 +21,7 @@ from kvc_application.errors import (
     CredentialDecryptionFailed,
     CredentialEncryptionFailed,
     IdentityConflict,
+    InvalidNotificationSettings,
     KaitenAuthenticationFailed,
     KaitenConnectionDisabled,
     KaitenConnectionMissing,
@@ -42,6 +45,7 @@ __all__ = [
     "IdentityConflict",
     "IdentityResolution",
     "IdentityService",
+    "InvalidNotificationSettings",
     "KaitenAuthenticationFailed",
     "KaitenConnectionDisabled",
     "KaitenConnectionMissing",
@@ -56,9 +60,11 @@ __all__ = [
     "KaitenVerificationFailed",
     "MarkKaitenNeedsReauthInput",
     "MaxChatType",
+    "NotificationSettingsResult",
     "PersistenceConflict",
     "ResolveMaxIdentityInput",
     "TokenCipher",
+    "UpdateNotificationSettingsInput",
     "UserDisabled",
     "UserStatus",
 ]

@@ -87,6 +87,22 @@ input:focus {
   outline: 3px solid rgba(31, 122, 102, 0.18);
 }
 
+.switch-row {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.switch-row input {
+  width: 28px;
+  min-height: 28px;
+  flex: 0 0 auto;
+  accent-color: #1f7a66;
+}
+
 button {
   min-height: 48px;
   border: 0;

@@ -96,6 +96,7 @@ class FakeSender:
         text: str,
         context_ref: str,
         label: str,
+        app_path: str | None = None,
         format: None = None,
         notify: bool = True,
     ) -> MaxSentMessage:

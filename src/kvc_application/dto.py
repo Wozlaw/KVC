@@ -99,6 +99,26 @@ class EncryptedToken:
     version: int
 
 
+@dataclass(frozen=True)
+class NotificationSettingsResult:
+    """Provider-neutral notification settings snapshot."""
+
+    user_id: UUID
+    enabled: bool
+    due_soon_days: int
+    timezone: str
+
+
+@dataclass(frozen=True)
+class UpdateNotificationSettingsInput:
+    """Input for updating per-user notification settings."""
+
+    user_id: UUID
+    enabled: bool
+    due_soon_days: int
+    timezone: str
+
+
 __all__ = [
     "ActiveKaitenConnectionSecret",
     "BindKaitenConnectionInput",
@@ -110,6 +130,8 @@ __all__ = [
     "KaitenCredentialVerification",
     "MarkKaitenNeedsReauthInput",
     "MaxChatType",
+    "NotificationSettingsResult",
     "ResolveMaxIdentityInput",
+    "UpdateNotificationSettingsInput",
     "UserStatus",
 ]

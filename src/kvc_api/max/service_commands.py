@@ -24,7 +24,8 @@ from kvc_api.max.response_text import (
     HELP_TEXT,
     MINI_APP_UNAVAILABLE_TEXT,
     NON_COMMAND_TEXT,
-    NOTIFICATIONS_LATER_TEXT,
+    NOTIFICATIONS_OPEN_LABEL,
+    NOTIFICATIONS_OPEN_TEXT,
     RECONNECT_MISSING_TEXT,
     RECONNECT_OPEN_LABEL,
     RECONNECT_OPEN_TEXT,
@@ -41,6 +42,7 @@ from kvc_application.errors import KaitenConnectionMissing, PersistenceConflict
 from kvc_integrations.max.context_signing import MiniAppContextPurpose, MiniAppContextSigner
 
 CONNECT_CONTEXT_TTL_SECONDS = 900
+NOTIFICATIONS_CONTEXT_TTL_SECONDS = 1800
 
 
 class KaitenConnectionDisabler(Protocol):
@@ -67,14 +69,28 @@ class ServiceCommandAction:
     text: str
     context_ref: str | None = None
     label: str | None = None
+    app_path: str | None = None
 
     @classmethod
     def text_reply(cls, text: str) -> ServiceCommandAction:
         return cls(kind="text", text=text)
 
     @classmethod
-    def open_app(cls, *, text: str, context_ref: str, label: str) -> ServiceCommandAction:
-        return cls(kind="open_app", text=text, context_ref=context_ref, label=label)
+    def open_app(
+        cls,
+        *,
+        text: str,
+        context_ref: str,
+        label: str,
+        app_path: str | None = None,
+    ) -> ServiceCommandAction:
+        return cls(
+            kind="open_app",
+            text=text,
+            context_ref=context_ref,
+            label=label,
+            app_path=app_path,
+        )
 
 
 class ServiceCommandHandler:
@@ -111,7 +127,7 @@ class ServiceCommandHandler:
         if context.command is MaxServiceCommand.DISABLE:
             return await self._disable_action(context)
         if context.command is MaxServiceCommand.NOTIFICATIONS:
-            return ServiceCommandAction.text_reply(NOTIFICATIONS_LATER_TEXT)
+            return self._notifications_action(context)
         if context.command is MaxServiceCommand.NON_COMMAND:
             return ServiceCommandAction.text_reply(NON_COMMAND_TEXT)
         return ServiceCommandAction.text_reply(UNKNOWN_COMMAND_TEXT)
@@ -157,6 +173,18 @@ class ServiceCommandHandler:
             label=RECONNECT_OPEN_LABEL,
         )
 
+    def _notifications_action(self, context: ServiceCommandContext) -> ServiceCommandAction:
+        if context.identity.user_status == "DISABLED":
+            return ServiceCommandAction.text_reply(USER_DISABLED_TEXT)
+        return self._open_app_action(
+            context,
+            purpose=MiniAppContextPurpose.NOTIFICATION_SETTINGS,
+            text=NOTIFICATIONS_OPEN_TEXT,
+            label=NOTIFICATIONS_OPEN_LABEL,
+            ttl_seconds=NOTIFICATIONS_CONTEXT_TTL_SECONDS,
+            app_path="/max/app/notifications",
+        )
+
     def _open_app_action(
         self,
         context: ServiceCommandContext,
@@ -164,6 +192,8 @@ class ServiceCommandHandler:
         purpose: MiniAppContextPurpose,
         text: str,
         label: str,
+        ttl_seconds: int = CONNECT_CONTEXT_TTL_SECONDS,
+        app_path: str | None = None,
     ) -> ServiceCommandAction:
         if not self._mini_app_launch_enabled or self._context_signer is None:
             return ServiceCommandAction.text_reply(MINI_APP_UNAVAILABLE_TEXT)
@@ -174,10 +204,15 @@ class ServiceCommandHandler:
         context_ref = self._context_signer.issue(
             purpose=purpose,
             identity_binding=binding,
-            ttl_seconds=CONNECT_CONTEXT_TTL_SECONDS,
+            ttl_seconds=ttl_seconds,
             now=self._now(),
         )
-        return ServiceCommandAction.open_app(text=text, context_ref=context_ref, label=label)
+        return ServiceCommandAction.open_app(
+            text=text,
+            context_ref=context_ref,
+            label=label,
+            app_path=app_path,
+        )
 
     def _connection_text(self, identity: IdentityResolution) -> str:
         status = identity.kaiten_connection_status
@@ -210,6 +245,7 @@ class ServiceCommandHandler:
 __all__ = [
     "CONNECT_CONTEXT_TTL_SECONDS",
     "KaitenConnectionDisabler",
+    "NOTIFICATIONS_CONTEXT_TTL_SECONDS",
     "ServiceCommandAction",
     "ServiceCommandContext",
     "ServiceCommandHandler",

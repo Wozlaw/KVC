@@ -169,6 +169,25 @@ async def test_send_open_app_to_chat_accepts_current_signed_context_token() -> N
 
 
 @pytest.mark.asyncio
+async def test_send_open_app_to_chat_can_target_notification_page_path() -> None:
+    captured: list[tuple[httpx.Request, Mapping[str, object]]] = []
+    http_client, sender = await _sender_with_capture(captured)
+    async with http_client:
+        await sender.send_open_app_to_chat(
+            chat_id="456",
+            text="Notifications",
+            context_ref=CONTEXT_MARKER,
+            label="Open",
+            app_path="/max/app/notifications",
+        )
+
+    _, body = captured[0]
+    attachment = body["attachments"][0]  # type: ignore[index]
+    web_app = attachment["payload"]["buttons"][0][0]["web_app"]  # type: ignore[index]
+    assert web_app == f"https://max.ru/max/app/notifications?lang=ru&startapp={CONTEXT_MARKER}"
+
+
+@pytest.mark.asyncio
 async def test_sender_validation_accepts_text_bounds_without_mutating_text() -> None:
     captured: list[tuple[httpx.Request, Mapping[str, object]]] = []
     http_client, sender = await _sender_with_capture(captured)

@@ -366,3 +366,38 @@ async def test_long_polling_connection_uses_same_status_command_path(
     assert len(provider.message_requests) == 1
     body = json.loads(provider.message_requests[0].content.decode("utf-8"))
     assert body["text"] == "Kaiten не подключён. Используйте /connect."
+
+
+@pytest.mark.asyncio
+async def test_long_polling_notifications_uses_same_open_app_command_path(
+    long_polling_pg_context: LongPollingPgContext,
+) -> None:
+    provider = await run_scripted_polling(
+        long_polling_pg_context,
+        [
+            {
+                "updates": [
+                    raw_private_update(
+                        long_polling_pg_context.prefix,
+                        user_suffix="u-notifications",
+                        chat_suffix="c-notifications",
+                        text="/notifications",
+                    )
+                ],
+                "marker": 10,
+            }
+        ],
+        mini_app_public_url="https://kvc.example.test/max/app",
+        mini_app_context_secret=SecretStr(CONTEXT_SECRET),
+    )
+
+    assert len(provider.message_requests) == 1
+    body = json.loads(provider.message_requests[0].content.decode("utf-8"))
+    attachment = body["attachments"][0]
+    web_app = attachment["payload"]["buttons"][0][0]["web_app"]
+    context_ref = str(web_app).split("startapp=", maxsplit=1)[1]
+    assert body["text"] == "Откройте Mini App, чтобы настроить уведомления."
+    assert attachment["payload"]["buttons"][0][0]["type"] == "open_app"
+    assert str(web_app).startswith("https://kvc.example.test/max/app/notifications?")
+    assert "." not in context_ref
+    assert len(context_ref) <= 512

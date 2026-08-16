@@ -49,6 +49,21 @@ class NotificationSettingsRepository:
         await self._session.refresh(settings)
         return settings
 
+    async def update_settings(
+        self,
+        settings: NotificationSetting,
+        *,
+        enabled: bool,
+        due_soon_days: int,
+        timezone: str,
+    ) -> NotificationSetting:
+        settings.enabled = enabled
+        settings.due_soon_days = due_soon_days
+        settings.timezone = timezone
+        await self._session.flush()
+        await self._session.refresh(settings)
+        return settings
+
     async def list_enabled(self) -> list[NotificationSetting]:
         result = await self._session.execute(
             select(NotificationSetting)

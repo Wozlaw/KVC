@@ -49,11 +49,16 @@ class PersistenceConflict(ApplicationError):
     """Raised when persistence invariants or retryable races cannot be resolved."""
 
 
+class InvalidNotificationSettings(ApplicationError):
+    """Raised when notification settings input violates the application contract."""
+
+
 __all__ = [
     "ApplicationError",
     "CredentialDecryptionFailed",
     "CredentialEncryptionFailed",
     "IdentityConflict",
+    "InvalidNotificationSettings",
     "KaitenAuthenticationFailed",
     "KaitenConnectionDisabled",
     "KaitenConnectionMissing",

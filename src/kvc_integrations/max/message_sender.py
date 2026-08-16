@@ -78,6 +78,7 @@ class MaxMessageSender:
         text: str,
         context_ref: str,
         label: str,
+        app_path: str | None = None,
         format: MaxTextFormat | None = None,
         notify: bool = True,
     ) -> MaxSentMessage:
@@ -87,7 +88,11 @@ class MaxMessageSender:
         _validate_context_ref(context_ref)
         if self._mini_app_public_url is None:
             raise MaxApiRequestError("MAX Mini App public URL is required")
-        launch_url = _with_startapp_context(self._mini_app_public_url, context_ref)
+        launch_url = _with_startapp_context(
+            self._mini_app_public_url,
+            context_ref,
+            app_path=app_path,
+        )
         attachment = {
             "type": "inline_keyboard",
             "payload": {
@@ -144,15 +149,20 @@ def _validate_mini_app_public_url(mini_app_public_url: str) -> str:
     return str(url)
 
 
-def _with_startapp_context(base_url: str, context_ref: str) -> str:
+def _with_startapp_context(base_url: str, context_ref: str, *, app_path: str | None = None) -> str:
     parsed = urlsplit(base_url)
+    path = parsed.path
+    if app_path is not None:
+        if not app_path.startswith("/") or app_path.startswith("//"):
+            raise MaxApiRequestError("MAX Mini App path is invalid")
+        path = app_path
     query = [(key, value) for key, value in parse_qsl(parsed.query) if key != "startapp"]
     query.append(("startapp", context_ref))
     return urlunsplit(
         (
             parsed.scheme,
             parsed.netloc,
-            parsed.path,
+            path,
             urlencode(query, safe="-_"),
             "",
         )

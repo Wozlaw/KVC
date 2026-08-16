@@ -16,7 +16,7 @@ from kvc_application.dto import (
     ResolveMaxIdentityInput,
 )
 from kvc_config import AppSettings
-from kvc_integrations.max.context_signing import MiniAppContextSigner
+from kvc_integrations.max.context_signing import MiniAppContextPurpose, MiniAppContextSigner
 from kvc_integrations.max.dto import MaxSentMessage
 
 WEBHOOK_SECRET = "SYNTHETIC-WEBHOOK-SECRET"
@@ -63,7 +63,7 @@ class FakeDisabler:
 class FakeSender:
     def __init__(self) -> None:
         self.text_calls: list[tuple[str, str]] = []
-        self.open_app_calls: list[tuple[str, str, str, str]] = []
+        self.open_app_calls: list[tuple[str, str, str, str, str | None]] = []
 
     async def send_text_to_chat(
         self,
@@ -83,10 +83,11 @@ class FakeSender:
         text: str,
         context_ref: str,
         label: str,
+        app_path: str | None = None,
         format: None = None,
         notify: bool = True,
     ) -> MaxSentMessage:
-        self.open_app_calls.append((chat_id, text, context_ref, label))
+        self.open_app_calls.append((chat_id, text, context_ref, label, app_path))
         return MaxSentMessage(message_id="mid-out", chat_id=chat_id, timestamp=3)
 
 
@@ -169,6 +170,32 @@ def test_webhook_reconnect_active_sends_open_app() -> None:
     assert response.status_code == 200
     assert len(sender.open_app_calls) == 1
     assert sender.open_app_calls[0][3] == "Переподключить Kaiten"
+
+
+def test_webhook_notifications_sends_notification_settings_open_app() -> None:
+    identity = FakeIdentity(connection_status="ACTIVE")
+    sender = FakeSender()
+
+    response = post_command(client(identity=identity, sender=sender), "/notifications")
+
+    assert response.status_code == 200
+    assert sender.text_calls == []
+    assert len(sender.open_app_calls) == 1
+    chat_id, text, context_ref, label, app_path = sender.open_app_calls[0]
+    binding = MiniAppContextSigner(CONTEXT_SECRET).make_identity_binding(
+        max_user_id="max-user-1",
+        chat_id="max-chat-1",
+    )
+    MiniAppContextSigner(CONTEXT_SECRET).verify(
+        context_ref,
+        expected_purpose=MiniAppContextPurpose.NOTIFICATION_SETTINGS,
+        expected_identity_binding=binding,
+        now=1_700_000_000,
+    )
+    assert chat_id == "max-chat-1"
+    assert text == "Откройте Mini App, чтобы настроить уведомления."
+    assert label == "Настроить уведомления"
+    assert app_path == "/max/app/notifications"
 
 
 def test_webhook_connection_and_status_use_safe_status_text() -> None:

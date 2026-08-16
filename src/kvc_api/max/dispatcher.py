@@ -74,6 +74,7 @@ class MessageSender(Protocol):
         text: str,
         context_ref: str,
         label: str,
+        app_path: str | None = None,
         format: None = None,
         notify: bool = True,
     ) -> MaxSentMessage: ...
@@ -204,6 +205,7 @@ class UpdateDispatcher:
                     text=action.text,
                     context_ref=action.context_ref,
                     label=action.label,
+                    app_path=action.app_path,
                 )
             else:
                 await self._message_sender.send_text_to_chat(chat_id=chat_id, text=action.text)

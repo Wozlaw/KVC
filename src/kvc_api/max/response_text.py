@@ -8,6 +8,7 @@ HELP_TEXT = (
     "/reconnect — заменить или восстановить подключение\n"
     "/connection — статус подключения\n"
     "/status — то же, что /connection\n"
+    "/notifications — настройки уведомлений\n"
     "/disable — отключить подключение\n"
     "/help — справка"
 )
@@ -17,7 +18,9 @@ USER_DISABLED_TEXT = "Учётная запись KVC отключена. Дос
 TEMPORARY_ERROR_TEXT = "Сервис временно не готов обработать команду. Попробуйте позже."
 UNKNOWN_COMMAND_TEXT = "Команда не распознана. Отправьте /help."
 NON_COMMAND_TEXT = "Отправьте /help, чтобы посмотреть доступные команды."
-NOTIFICATIONS_LATER_TEXT = "Настройки уведомлений появятся на следующем этапе."
+NOTIFICATIONS_OPEN_TEXT = "Откройте Mini App, чтобы настроить уведомления."
+NOTIFICATIONS_OPEN_LABEL = "Настроить уведомления"
+NOTIFICATIONS_SAVED_TEXT = "Настройки уведомлений сохранены."
 START_MISSING_CONNECTION_TEXT = (
     "KVC готов к работе. Kaiten ещё не подключён. Используйте /connect, затем /help."
 )
@@ -62,7 +65,9 @@ __all__ = [
     "IDENTITY_CONFLICT_TEXT",
     "MINI_APP_UNAVAILABLE_TEXT",
     "NON_COMMAND_TEXT",
-    "NOTIFICATIONS_LATER_TEXT",
+    "NOTIFICATIONS_OPEN_LABEL",
+    "NOTIFICATIONS_OPEN_TEXT",
+    "NOTIFICATIONS_SAVED_TEXT",
     "RECONNECT_MISSING_TEXT",
     "RECONNECT_OPEN_LABEL",
     "RECONNECT_OPEN_TEXT",

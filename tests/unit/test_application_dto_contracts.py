@@ -20,7 +20,9 @@ from kvc_application.dto import (
     KaitenCredentialVerification,
     MarkKaitenNeedsReauthInput,
     MaxChatType,
+    NotificationSettingsResult,
     ResolveMaxIdentityInput,
+    UpdateNotificationSettingsInput,
     UserStatus,
 )
 
@@ -79,6 +81,14 @@ def test_status_type_aliases_are_literal_contracts() -> None:
         (MarkKaitenNeedsReauthInput, ["user_id", "snapshot", "reason"]),
         (KaitenCredentialVerification, ["kaiten_user_id", "workspace_id"]),
         (EncryptedToken, ["ciphertext", "version"]),
+        (
+            NotificationSettingsResult,
+            ["user_id", "enabled", "due_soon_days", "timezone"],
+        ),
+        (
+            UpdateNotificationSettingsInput,
+            ["user_id", "enabled", "due_soon_days", "timezone"],
+        ),
     ],
 )
 def test_dto_field_inventory(dto_type: type[object], expected_fields: list[str]) -> None:
@@ -116,6 +126,8 @@ def test_dto_field_inventory(dto_type: type[object], expected_fields: list[str])
         ),
         KaitenCredentialVerification("kaiten-user", "workspace"),
         EncryptedToken(FAKE_CIPHERTEXT, 1),
+        NotificationSettingsResult(USER_ID, True, 3, "UTC"),
+        UpdateNotificationSettingsInput(USER_ID, False, 1, "Europe/Warsaw"),
     ],
 )
 def test_dtos_are_frozen(dto: object) -> None:

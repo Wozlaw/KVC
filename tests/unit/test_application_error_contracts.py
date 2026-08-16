@@ -7,6 +7,7 @@ from kvc_application.errors import (
     CredentialDecryptionFailed,
     CredentialEncryptionFailed,
     IdentityConflict,
+    InvalidNotificationSettings,
     KaitenAuthenticationFailed,
     KaitenConnectionDisabled,
     KaitenConnectionMissing,
@@ -29,6 +30,7 @@ ERROR_TYPES = [
     CredentialEncryptionFailed,
     CredentialDecryptionFailed,
     PersistenceConflict,
+    InvalidNotificationSettings,
 ]
 
 
