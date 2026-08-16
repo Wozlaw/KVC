@@ -1,3 +1,61 @@
 """Application layer package for Kaiten Voice Control."""
 
-__all__: list[str] = []
+from kvc_application.dto import (
+    ActiveKaitenConnectionSecret,
+    BindKaitenConnectionInput,
+    EncryptedToken,
+    IdentityResolution,
+    KaitenConnectionResult,
+    KaitenConnectionStatus,
+    KaitenCredentialSnapshot,
+    KaitenCredentialVerification,
+    MarkKaitenNeedsReauthInput,
+    MaxChatType,
+    ResolveMaxIdentityInput,
+    UserStatus,
+)
+from kvc_application.errors import (
+    ApplicationError,
+    CredentialDecryptionFailed,
+    CredentialEncryptionFailed,
+    IdentityConflict,
+    KaitenAuthenticationFailed,
+    KaitenConnectionDisabled,
+    KaitenConnectionMissing,
+    KaitenConnectionNeedsReauth,
+    KaitenTemporarilyUnavailable,
+    KaitenVerificationFailed,
+    PersistenceConflict,
+    UserDisabled,
+)
+from kvc_application.ports import Clock, KaitenCredentialVerifier, TokenCipher
+
+__all__ = [
+    "ActiveKaitenConnectionSecret",
+    "ApplicationError",
+    "BindKaitenConnectionInput",
+    "Clock",
+    "CredentialDecryptionFailed",
+    "CredentialEncryptionFailed",
+    "EncryptedToken",
+    "IdentityConflict",
+    "IdentityResolution",
+    "KaitenAuthenticationFailed",
+    "KaitenConnectionDisabled",
+    "KaitenConnectionMissing",
+    "KaitenConnectionNeedsReauth",
+    "KaitenConnectionResult",
+    "KaitenConnectionStatus",
+    "KaitenCredentialSnapshot",
+    "KaitenCredentialVerification",
+    "KaitenCredentialVerifier",
+    "KaitenTemporarilyUnavailable",
+    "KaitenVerificationFailed",
+    "MarkKaitenNeedsReauthInput",
+    "MaxChatType",
+    "PersistenceConflict",
+    "ResolveMaxIdentityInput",
+    "TokenCipher",
+    "UserDisabled",
+    "UserStatus",
+]
