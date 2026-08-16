@@ -7,6 +7,7 @@ from typing import Literal
 
 MaxUpdateSource = Literal["webhook", "long_polling"]
 MaxChatType = Literal["PRIVATE", "GROUP", "CHANNEL", "UNKNOWN"]
+MaxTextFormat = Literal["markdown", "html"]
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,15 @@ class MaxIncomingUpdate:
     message_timestamp: int | None
     callback_payload: str | None
     attachments: tuple[MaxAttachmentMetadata, ...] = ()
+
+
+@dataclass(frozen=True)
+class MaxSentMessage:
+    """Normalized outbound MAX message result."""
+
+    message_id: str | None
+    chat_id: str | None
+    timestamp: int | None
 
 
 @dataclass(frozen=True)
@@ -82,6 +92,8 @@ __all__ = [
     "MaxAttachmentMetadata",
     "MaxChatType",
     "MaxIncomingUpdate",
+    "MaxSentMessage",
+    "MaxTextFormat",
     "MaxUpdateSource",
     "ValidatedMaxMiniAppChat",
     "ValidatedMaxMiniAppInitData",
