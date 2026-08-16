@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -46,6 +47,14 @@ class MaxSentMessage:
     message_id: str | None
     chat_id: str | None
     timestamp: int | None
+
+
+@dataclass(frozen=True)
+class MaxUpdatesBatch:
+    """Normalized MAX Long Polling response envelope."""
+
+    updates: tuple[Mapping[str, object], ...]
+    marker: str | None
 
 
 @dataclass(frozen=True)
@@ -96,6 +105,7 @@ __all__ = [
     "MaxSentMessage",
     "MaxTextFormat",
     "MaxUpdateSource",
+    "MaxUpdatesBatch",
     "ValidatedMaxMiniAppChat",
     "ValidatedMaxMiniAppInitData",
     "ValidatedMaxMiniAppUser",

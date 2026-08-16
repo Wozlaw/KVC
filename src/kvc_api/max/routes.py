@@ -32,6 +32,9 @@ def create_max_router(
 
     @router.post(settings.max_webhook_path, response_model=MaxWebhookResponse)
     async def max_webhook(request: Request) -> Response:
+        if settings.max_inbound_mode != "webhook":
+            return JSONResponse({"status": "inactive_inbound_mode"}, status_code=409)
+
         supplied_secret = request.headers.get(MAX_WEBHOOK_SECRET_HEADER)
         if not validate_webhook_secret(
             configured_secret=settings.max_webhook_secret,

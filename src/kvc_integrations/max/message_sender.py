@@ -22,10 +22,14 @@ class MaxMessageSender:
         self,
         api_client: MaxBotApiClient,
         *,
-        mini_app_public_url: str,
+        mini_app_public_url: str | None = None,
     ) -> None:
         self._api_client = api_client
-        self._mini_app_public_url = _validate_mini_app_public_url(mini_app_public_url)
+        self._mini_app_public_url = (
+            None
+            if mini_app_public_url is None
+            else _validate_mini_app_public_url(mini_app_public_url)
+        )
 
     def __repr__(self) -> str:
         return (
@@ -81,6 +85,8 @@ class MaxMessageSender:
         _validate_text(text)
         _validate_label(label)
         _validate_context_ref(context_ref)
+        if self._mini_app_public_url is None:
+            raise MaxApiRequestError("MAX Mini App public URL is required")
         launch_url = _with_startapp_context(self._mini_app_public_url, context_ref)
         attachment = {
             "type": "inline_keyboard",

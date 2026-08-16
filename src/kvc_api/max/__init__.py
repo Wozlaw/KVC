@@ -8,6 +8,12 @@ from kvc_api.max.dispatcher import (
     WebhookRetryableDispatchError,
 )
 from kvc_api.max.routes import create_max_router
+from kvc_api.max.runtime import (
+    MaxRuntime,
+    MaxRuntimeConfigurationError,
+    build_max_dispatcher,
+    build_max_runtime,
+)
 from kvc_api.max.webhook import MAX_WEBHOOK_SECRET_HEADER, validate_webhook_secret
 
 __all__ = [
@@ -17,8 +23,12 @@ __all__ = [
     "DispatchOutcome",
     "DispatchStatus",
     "MaxServiceCommand",
+    "MaxRuntime",
+    "MaxRuntimeConfigurationError",
     "UpdateDispatcher",
     "WebhookRetryableDispatchError",
+    "build_max_dispatcher",
+    "build_max_runtime",
     "create_max_router",
     "validate_webhook_secret",
 ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from uuid import uuid4
 
 import pytest
@@ -99,6 +100,17 @@ def dispatcher(
     )
 
 
+def dispatcher_with_factory(
+    identity_factory: Callable[[], FakeIdentityService],
+    sender: FakeSender,
+) -> UpdateDispatcher:
+    return UpdateDispatcher(
+        identity_resolver_factory=identity_factory,
+        message_sender=sender,
+        allowed_update_types=("message_created", "message_callback", "bot_started"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_dispatcher_resolves_private_identity_and_replies_through_sender() -> None:
     identity = FakeIdentityService()
@@ -118,6 +130,28 @@ async def test_dispatcher_resolves_private_identity_and_replies_through_sender()
             chat_type="PRIVATE",
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_uses_identity_factory_per_private_dispatch() -> None:
+    identities = [FakeIdentityService(), FakeIdentityService()]
+    factory_calls = 0
+
+    def identity_factory() -> FakeIdentityService:
+        nonlocal factory_calls
+        identity = identities[factory_calls]
+        factory_calls += 1
+        return identity
+
+    sender = FakeSender()
+    tested_dispatcher = dispatcher_with_factory(identity_factory, sender)
+
+    await tested_dispatcher.dispatch(private_update(chat_id="chat-a"))
+    await tested_dispatcher.dispatch(private_update(chat_id="chat-b"))
+
+    assert factory_calls == 2
+    assert len(identities[0].calls) == 1
+    assert len(identities[1].calls) == 1
 
 
 @pytest.mark.asyncio

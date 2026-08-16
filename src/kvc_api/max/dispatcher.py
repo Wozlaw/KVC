@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
@@ -49,6 +50,9 @@ class IdentityResolver(Protocol):
     ) -> IdentityResolution: ...
 
 
+IdentityResolverFactory = Callable[[], IdentityResolver]
+
+
 class MessageSender(Protocol):
     async def send_text_to_chat(
         self,
@@ -66,12 +70,19 @@ class UpdateDispatcher:
     def __init__(
         self,
         *,
-        identity_service: IdentityResolver,
+        identity_service: IdentityResolver | None = None,
+        identity_resolver_factory: IdentityResolverFactory | None = None,
         message_sender: MessageSender,
         command_router: CommandRouter | None = None,
         allowed_update_types: tuple[str, ...],
     ) -> None:
-        self._identity_service = identity_service
+        if (identity_service is None) == (identity_resolver_factory is None):
+            raise ValueError("Exactly one identity resolver source is required")
+        if identity_resolver_factory is not None:
+            self._identity_resolver_factory = identity_resolver_factory
+        else:
+            assert identity_service is not None
+            self._identity_resolver_factory = lambda: identity_service
         self._message_sender = message_sender
         self._command_router = command_router or CommandRouter()
         self._allowed_update_types = frozenset(allowed_update_types)
@@ -110,7 +121,8 @@ class UpdateDispatcher:
             return DispatchOutcome(status=DispatchStatus.IGNORED, update_type=update.update_type)
 
         try:
-            identity = await self._identity_service.resolve_or_onboard_private_max_user(
+            identity_resolver = self._identity_resolver_factory()
+            identity = await identity_resolver.resolve_or_onboard_private_max_user(
                 ResolveMaxIdentityInput(
                     max_user_id=update.max_user_id,
                     max_chat_id=chat_id,
@@ -190,6 +202,7 @@ __all__ = [
     "DispatchOutcome",
     "DispatchStatus",
     "IdentityResolver",
+    "IdentityResolverFactory",
     "MessageSender",
     "UpdateDispatcher",
     "WebhookRetryableDispatchError",

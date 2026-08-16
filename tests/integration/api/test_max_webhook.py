@@ -154,3 +154,24 @@ def test_webhook_without_runtime_dependencies_returns_503_without_breaking_healt
 
     assert health.status_code == 200
     assert webhook.status_code == 503
+
+
+def test_webhook_in_long_polling_mode_rejects_without_dispatch_and_keeps_health() -> None:
+    dispatcher = FakeDispatcher()
+    settings = AppSettings(
+        max_inbound_mode="long_polling",
+        max_webhook_secret=SecretStr(WEBHOOK_SECRET),
+    )
+    client = TestClient(create_app(settings, max_dispatcher=dispatcher))
+
+    health = client.get("/health")
+    webhook = client.post(
+        "/max/webhook",
+        headers={"X-Max-Bot-Api-Secret": WEBHOOK_SECRET},
+        json=private_message_update(),
+    )
+
+    assert health.status_code == 200
+    assert webhook.status_code == 409
+    assert webhook.json() == {"status": "inactive_inbound_mode"}
+    assert dispatcher.calls == []

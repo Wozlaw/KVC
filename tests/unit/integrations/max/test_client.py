@@ -8,7 +8,14 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from kvc_integrations.max import MAX_MESSAGE_TEXT_LIMIT, MaxBotApiClient, MaxSentMessage
+from kvc_integrations.max import (
+    MAX_MESSAGE_TEXT_LIMIT,
+    MAX_UPDATES_LIMIT_MAX,
+    MAX_UPDATES_TIMEOUT_MAX,
+    MaxBotApiClient,
+    MaxSentMessage,
+    MaxUpdatesBatch,
+)
 from kvc_integrations.max.errors import (
     MaxApiAuthenticationError,
     MaxApiRateLimitError,
@@ -310,3 +317,158 @@ def test_client_rejects_blank_token_and_invalid_base_url_safely() -> None:
 
 def test_max_message_text_limit_matches_official_documented_bound() -> None:
     assert MAX_MESSAGE_TEXT_LIMIT == 4000
+
+
+@pytest.mark.asyncio
+async def test_client_get_updates_request_shape_and_marker_progression() -> None:
+    captured: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(
+            {
+                "method": request.method,
+                "path": request.url.path,
+                "query": dict(request.url.params),
+                "auth": request.headers.get("Authorization"),
+                "token_in_url": TOKEN_MARKER in str(request.url),
+                "has_body": request.content != b"",
+            }
+        )
+        marker = 100 if len(captured) == 1 else 200
+        return httpx.Response(
+            200,
+            json={
+                "updates": [{"update_type": "message_created", "timestamp": 1}],
+                "marker": marker,
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = MaxBotApiClient(
+            http_client,
+            bot_token=TOKEN_MARKER,
+            api_base_url="https://platform-api2.max.ru",
+        )
+
+        first = await client.get_updates(
+            marker=None,
+            limit=100,
+            timeout_seconds=60,
+            update_types=("message_created", "message_callback"),
+        )
+        second = await client.get_updates(
+            marker=first.marker,
+            limit=100,
+            timeout_seconds=60,
+            update_types=("message_created", "message_callback"),
+        )
+
+    assert first == MaxUpdatesBatch(
+        updates=({"update_type": "message_created", "timestamp": 1},),
+        marker="100",
+    )
+    assert second.marker == "200"
+    assert captured == [
+        {
+            "method": "GET",
+            "path": "/updates",
+            "query": {
+                "limit": "100",
+                "timeout": "60",
+                "types": "message_created,message_callback",
+            },
+            "auth": TOKEN_MARKER,
+            "token_in_url": False,
+            "has_body": False,
+        },
+        {
+            "method": "GET",
+            "path": "/updates",
+            "query": {
+                "limit": "100",
+                "timeout": "60",
+                "marker": "100",
+                "types": "message_created,message_callback",
+            },
+            "auth": TOKEN_MARKER,
+            "token_in_url": False,
+            "has_body": False,
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    ("marker", "limit", "timeout_seconds", "update_types"),
+    [
+        (None, 0, 60, None),
+        (None, MAX_UPDATES_LIMIT_MAX + 1, 60, None),
+        (None, 100, -1, None),
+        (None, 100, MAX_UPDATES_TIMEOUT_MAX + 1, None),
+        ("", 100, 60, None),
+        (None, 100, 60, ()),
+        (None, 100, 60, ("",)),
+    ],
+)
+@pytest.mark.asyncio
+async def test_client_get_updates_rejects_invalid_local_inputs_without_http(
+    marker: str | None,
+    limit: int,
+    timeout_seconds: int,
+    update_types: tuple[str, ...] | None,
+) -> None:
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(200, json={"updates": [], "marker": None})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = MaxBotApiClient(
+            http_client,
+            bot_token=TOKEN_MARKER,
+            api_base_url="https://platform-api2.max.ru",
+        )
+
+        with pytest.raises(MaxApiRequestError):
+            await client.get_updates(
+                marker=marker,
+                limit=limit,
+                timeout_seconds=timeout_seconds,
+                update_types=update_types,
+            )
+
+    assert request_count == 0
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, text=f"not-json-{BODY_MARKER}"),
+        httpx.Response(200, json=[]),
+        httpx.Response(200, json={}),
+        httpx.Response(200, json={"updates": {}}),
+        httpx.Response(200, json={"updates": [1]}),
+        httpx.Response(200, json={"updates": [], "marker": True}),
+        httpx.Response(200, json={"updates": [], "marker": ""}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_client_get_updates_maps_malformed_success_payload_safely(
+    response: httpx.Response,
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: response)
+    ) as http_client:
+        client = MaxBotApiClient(
+            http_client,
+            bot_token=TOKEN_MARKER,
+            api_base_url="https://platform-api2.max.ru",
+        )
+
+        with pytest.raises(MaxApiResponseError) as caught:
+            await client.get_updates(marker=None, limit=100, timeout_seconds=60)
+
+    rendered = f"{caught.value!s} {caught.value!r}"
+    assert TOKEN_MARKER not in rendered
+    assert BODY_MARKER not in rendered

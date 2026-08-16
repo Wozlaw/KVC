@@ -55,6 +55,20 @@ def test_parse_message_created_private_with_attachment_metadata() -> None:
     assert "message" not in parsed.__dataclass_fields__
 
 
+def test_parse_message_created_reuses_same_contract_for_long_polling_source() -> None:
+    raw_update = message_created_update()
+
+    webhook = parse_max_update(raw_update, source="webhook")
+    long_polling = parse_max_update(raw_update, source="long_polling")
+
+    assert webhook.source == "webhook"
+    assert long_polling.source == "long_polling"
+    assert {
+        **webhook.__dict__,
+        "source": "long_polling",
+    } == long_polling.__dict__
+
+
 @pytest.mark.parametrize(
     ("raw_chat_type", "normalized"),
     [

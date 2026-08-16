@@ -8,7 +8,7 @@ from math import isfinite
 import httpx
 from pydantic import SecretStr
 
-from kvc_integrations.max.dto import MaxSentMessage, MaxTextFormat
+from kvc_integrations.max.dto import MaxSentMessage, MaxTextFormat, MaxUpdatesBatch
 from kvc_integrations.max.errors import (
     MaxApiAuthenticationError,
     MaxApiError,
@@ -25,6 +25,10 @@ JsonObject = dict[str, object]
 JsonMapping = Mapping[str, object]
 
 MAX_MESSAGE_TEXT_LIMIT = 4000
+MAX_UPDATES_LIMIT_MIN = 1
+MAX_UPDATES_LIMIT_MAX = 1000
+MAX_UPDATES_TIMEOUT_MIN = 0
+MAX_UPDATES_TIMEOUT_MAX = 90
 
 
 class MaxBotApiClient:
@@ -76,6 +80,30 @@ class MaxBotApiClient:
             json_body=body,
         )
         return _parse_sent_message(payload)
+
+    async def get_updates(
+        self,
+        *,
+        marker: str | None,
+        limit: int,
+        timeout_seconds: int,
+        update_types: tuple[str, ...] | None = None,
+    ) -> MaxUpdatesBatch:
+        """Fetch MAX updates through the official Long Polling endpoint."""
+
+        params = _updates_params(
+            marker=marker,
+            limit=limit,
+            timeout_seconds=timeout_seconds,
+            update_types=update_types,
+        )
+        payload = await self._request_json(
+            "GET",
+            "/updates",
+            operation="get_updates",
+            params=params,
+        )
+        return _parse_updates_batch(payload)
 
     async def _request_json(
         self,
@@ -150,6 +178,30 @@ def _recipient_params(*, chat_id: str | None, user_id: str | None) -> dict[str, 
     return {"user_id": user_id}
 
 
+def _updates_params(
+    *,
+    marker: str | None,
+    limit: int,
+    timeout_seconds: int,
+    update_types: tuple[str, ...] | None,
+) -> dict[str, str]:
+    if not MAX_UPDATES_LIMIT_MIN <= limit <= MAX_UPDATES_LIMIT_MAX:
+        raise MaxApiRequestError("MAX updates limit is out of range")
+    if not MAX_UPDATES_TIMEOUT_MIN <= timeout_seconds <= MAX_UPDATES_TIMEOUT_MAX:
+        raise MaxApiRequestError("MAX updates timeout is out of range")
+
+    params = {"limit": str(limit), "timeout": str(timeout_seconds)}
+    if marker is not None:
+        if marker.strip() == "":
+            raise MaxApiRequestError("MAX updates marker is invalid")
+        params["marker"] = marker
+    if update_types is not None:
+        if not update_types or any(update_type.strip() == "" for update_type in update_types):
+            raise MaxApiRequestError("MAX update type filter is invalid")
+        params["types"] = ",".join(update_types)
+    return params
+
+
 def _parse_sent_message(payload: JsonMapping) -> MaxSentMessage:
     message = payload.get("message")
     if not isinstance(message, dict):
@@ -170,6 +222,33 @@ def _parse_sent_message(payload: JsonMapping) -> MaxSentMessage:
         ),
         timestamp=_optional_int(message.get("timestamp")),
     )
+
+
+def _parse_updates_batch(payload: JsonMapping) -> MaxUpdatesBatch:
+    raw_updates = payload.get("updates")
+    if not isinstance(raw_updates, list):
+        raise MaxApiResponseError("Unexpected MAX API response", operation="get_updates")
+
+    updates: list[Mapping[str, object]] = []
+    for raw_update in raw_updates:
+        if not isinstance(raw_update, dict):
+            raise MaxApiResponseError("Unexpected MAX API response", operation="get_updates")
+        updates.append(dict(raw_update))
+
+    return MaxUpdatesBatch(
+        updates=tuple(updates),
+        marker=_optional_marker(payload.get("marker")),
+    )
+
+
+def _optional_marker(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise MaxApiResponseError("Unexpected MAX API response", operation="get_updates")
+    if isinstance(value, int | str) and str(value) != "":
+        return str(value)
+    raise MaxApiResponseError("Unexpected MAX API response", operation="get_updates")
 
 
 def _optional_scalar_to_str(value: object) -> str | None:
@@ -244,4 +323,11 @@ def _parse_retry_after(value: str | None) -> int | None:
     return int(parsed)
 
 
-__all__ = ["MAX_MESSAGE_TEXT_LIMIT", "MaxBotApiClient"]
+__all__ = [
+    "MAX_MESSAGE_TEXT_LIMIT",
+    "MAX_UPDATES_LIMIT_MAX",
+    "MAX_UPDATES_LIMIT_MIN",
+    "MAX_UPDATES_TIMEOUT_MAX",
+    "MAX_UPDATES_TIMEOUT_MIN",
+    "MaxBotApiClient",
+]
