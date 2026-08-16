@@ -14,12 +14,22 @@ from kvc_persistence import (
     dispose_async_engine,
     get_database_url,
 )
+from kvc_persistence import models as _models
 
 TEST_DATABASE_URL = "postgresql+asyncpg://user:password@127.0.0.1:5432/kvc_test"
 
 
-def test_base_metadata_exists_without_tables() -> None:
-    assert Base.metadata.tables == {}
+def test_base_metadata_contains_mvp_business_tables() -> None:
+    assert _models.User.__tablename__ == "users"
+    assert set(Base.metadata.tables) == {
+        "users",
+        "max_chats",
+        "kaiten_connections",
+        "dialog_sessions",
+        "pending_commands",
+        "notification_settings",
+        "notification_history",
+    }
 
 
 def test_base_metadata_naming_convention() -> None:

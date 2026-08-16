@@ -7,8 +7,26 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from kvc_config import get_settings
 from kvc_persistence.base import Base
 from kvc_persistence.engine import get_database_url
+from kvc_persistence.models import (
+    DialogSession,
+    KaitenConnection,
+    MaxChat,
+    NotificationHistory,
+    NotificationSetting,
+    PendingCommand,
+    User,
+)
 
 config = context.config
+_REGISTERED_MODELS = (
+    DialogSession,
+    KaitenConnection,
+    MaxChat,
+    NotificationHistory,
+    NotificationSetting,
+    PendingCommand,
+    User,
+)
 target_metadata = Base.metadata
 
 
