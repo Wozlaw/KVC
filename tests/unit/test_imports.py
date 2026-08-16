@@ -18,6 +18,8 @@ def test_top_level_packages_import() -> None:
         "kvc_integrations.gigachat",
         "kvc_integrations.stt",
         "kvc_integrations.stt.salutespeech",
+        "kvc_persistence.models",
+        "kvc_persistence.repositories",
     ]
 
     for package_name in packages:
