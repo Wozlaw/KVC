@@ -15,6 +15,7 @@ def test_top_level_packages_import() -> None:
         "kvc_config",
         "kvc_integrations",
         "kvc_integrations.security",
+        "kvc_integrations.system",
         "kvc_integrations.kaiten",
         "kvc_integrations.max",
         "kvc_integrations.gigachat",

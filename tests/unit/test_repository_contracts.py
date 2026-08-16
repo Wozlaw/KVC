@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 from kvc_persistence.repositories import (
     DialogSessionRepository,
+    KaitenConnectionRepository,
     MaxChatRepository,
     NotificationHistoryRepository,
     PendingCommandRepository,
@@ -62,6 +63,13 @@ def test_max_chat_private_identity_lock_method_uses_for_update() -> None:
 
     assert "MaxChat.max_user_id == max_user_id" in source
     assert 'MaxChat.chat_type == "PRIVATE"' in source
+    assert ".with_for_update()" in source
+
+
+def test_kaiten_connection_lock_method_uses_for_update() -> None:
+    source = inspect.getsource(KaitenConnectionRepository.get_for_user_for_update)
+
+    assert "KaitenConnection.user_id == user_id" in source
     assert ".with_for_update()" in source
 
 

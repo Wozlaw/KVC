@@ -1,3 +1,5 @@
 """Kaiten adapter package."""
 
-__all__: list[str] = []
+from kvc_integrations.kaiten.credential_verifier import KaitenHttpCredentialVerifier
+
+__all__ = ["KaitenHttpCredentialVerifier"]
