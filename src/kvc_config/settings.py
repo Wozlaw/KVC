@@ -24,10 +24,19 @@ class AppSettings(BaseSettings):
     log_level: str = "INFO"
     database_url: SecretStr | None = None
     database_echo: bool = False
+    token_encryption_active_version: int | None = None
+    token_encryption_keys: SecretStr | None = None
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "token_encryption_keys", mode="before")
     @classmethod
-    def normalize_blank_database_url(cls, value: object) -> object:
+    def normalize_blank_secret(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
+
+    @field_validator("token_encryption_active_version", mode="before")
+    @classmethod
+    def normalize_blank_token_encryption_active_version(cls, value: object) -> object:
         if value == "":
             return None
         return value
