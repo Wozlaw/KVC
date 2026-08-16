@@ -29,6 +29,7 @@ from kvc_application.errors import (
     UserDisabled,
 )
 from kvc_application.ports import Clock, KaitenCredentialVerifier, TokenCipher
+from kvc_application.services import IdentityService
 
 __all__ = [
     "ActiveKaitenConnectionSecret",
@@ -40,6 +41,7 @@ __all__ = [
     "EncryptedToken",
     "IdentityConflict",
     "IdentityResolution",
+    "IdentityService",
     "KaitenAuthenticationFailed",
     "KaitenConnectionDisabled",
     "KaitenConnectionMissing",

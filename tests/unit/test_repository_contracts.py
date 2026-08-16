@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 from kvc_persistence.repositories import (
     DialogSessionRepository,
+    MaxChatRepository,
     NotificationHistoryRepository,
     PendingCommandRepository,
     PersistenceInvariantError,
@@ -54,6 +55,26 @@ def test_lock_statement_helpers_compile_to_for_update() -> None:
     assert "FOR UPDATE" in compile_postgresql(
         select_active_pending_command_for_update(dialog_session_id)
     )
+
+
+def test_max_chat_private_identity_lock_method_uses_for_update() -> None:
+    source = inspect.getsource(MaxChatRepository.get_private_by_max_user_id_for_update)
+
+    assert "MaxChat.max_user_id == max_user_id" in source
+    assert 'MaxChat.chat_type == "PRIVATE"' in source
+    assert ".with_for_update()" in source
+
+
+def test_max_chat_update_max_chat_id_changes_only_external_chat_id() -> None:
+    source = inspect.getsource(MaxChatRepository.update_max_chat_id)
+
+    assert "binding.max_chat_id = max_chat_id" in source
+    assert "binding.user_id =" not in source
+    assert "binding.max_user_id =" not in source
+    assert "binding.chat_type =" not in source
+    assert "binding.is_primary =" not in source
+    assert ".commit(" not in source
+    assert ".rollback(" not in source
 
 
 def test_dialog_get_or_create_uses_parent_user_lock_pattern() -> None:

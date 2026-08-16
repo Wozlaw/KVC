@@ -9,6 +9,7 @@ def test_top_level_packages_import() -> None:
         "kvc_worker",
         "kvc_domain",
         "kvc_application",
+        "kvc_application.services",
         "kvc_persistence",
         "kvc_notifications",
         "kvc_config",

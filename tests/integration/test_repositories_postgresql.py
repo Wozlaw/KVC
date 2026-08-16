@@ -142,8 +142,22 @@ async def test_max_chat_repository_private_binding_queries(db_session: AsyncSess
 
     assert await repository.get_by_max_chat_id(binding.max_chat_id) is binding
     assert await repository.get_private_by_max_user_id(binding.max_user_id) is binding
+    assert await repository.get_private_by_max_user_id_for_update(binding.max_user_id) is binding
     assert await repository.get_primary_for_user(user_id) is binding
     assert binding.chat_type == "PRIVATE"
+
+    original_user_id = binding.user_id
+    original_max_user_id = binding.max_user_id
+    original_id = binding.id
+    updated = await repository.update_max_chat_id(
+        binding,
+        f"synthetic-max-chat-rotated-{uuid.uuid4()}",
+    )
+    assert updated.id == original_id
+    assert updated.user_id == original_user_id
+    assert updated.max_user_id == original_max_user_id
+    assert updated.chat_type == "PRIVATE"
+    assert updated.is_primary is True
 
 
 @pytest.mark.asyncio

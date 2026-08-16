@@ -32,6 +32,17 @@ class MaxChatRepository:
             ),
         )
 
+    async def get_private_by_max_user_id_for_update(self, max_user_id: str) -> MaxChat | None:
+        return await _scalar_one_or_none(
+            self._session,
+            select(MaxChat)
+            .where(
+                MaxChat.max_user_id == max_user_id,
+                MaxChat.chat_type == "PRIVATE",
+            )
+            .with_for_update(),
+        )
+
     async def get_primary_for_user(self, user_id: uuid.UUID) -> MaxChat | None:
         return await _scalar_one_or_none(
             self._session,
@@ -58,6 +69,12 @@ class MaxChatRepository:
             binding.id = binding_id
 
         self._session.add(binding)
+        await self._session.flush()
+        await self._session.refresh(binding)
+        return binding
+
+    async def update_max_chat_id(self, binding: MaxChat, max_chat_id: str) -> MaxChat:
+        binding.max_chat_id = max_chat_id
         await self._session.flush()
         await self._session.refresh(binding)
         return binding
