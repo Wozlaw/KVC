@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kvc_api.max.command_router import CommandRouter
 from kvc_api.max.dispatcher import UpdateDispatcher
+from kvc_application.dto import (
+    BindKaitenConnectionInput,
+    IdentityResolution,
+    KaitenConnectionResult,
+    ResolveMaxIdentityInput,
+)
 from kvc_application.services import IdentityService
 from kvc_config import AppSettings
-from kvc_integrations.max import MaxBotApiClient, MaxMessageSender
+from kvc_integrations.max import MaxBotApiClient, MaxMessageSender, MiniAppContextSigner
 
 
 class MaxRuntimeConfigurationError(RuntimeError):
@@ -25,6 +33,46 @@ class MaxRuntime:
     dispatcher: UpdateDispatcher
     message_sender: MaxMessageSender
     api_client: MaxBotApiClient
+
+
+class MaxIdentityResolver(Protocol):
+    """Application identity resolver used by MAX presentation adapters."""
+
+    async def resolve_or_onboard_private_max_user(
+        self,
+        input: ResolveMaxIdentityInput,
+    ) -> IdentityResolution: ...
+
+
+class KaitenConnectionBinder(Protocol):
+    """Kaiten credential binder used by MAX Mini App presentation."""
+
+    async def bind_or_replace_connection(
+        self,
+        input: BindKaitenConnectionInput,
+    ) -> KaitenConnectionResult: ...
+
+
+class MaxMessageConfirmationSender(Protocol):
+    """Minimal outbound MAX confirmation contract for Mini App routes."""
+
+    async def send_text_to_chat(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        notify: bool = True,
+    ) -> object: ...
+
+
+@dataclass(frozen=True)
+class MaxMiniAppRuntime:
+    """Request-scoped service factories for MAX Mini App routes."""
+
+    identity_resolver_factory: Callable[[], MaxIdentityResolver]
+    kaiten_connection_binder_factory: Callable[[], KaitenConnectionBinder]
+    message_sender: MaxMessageConfirmationSender
+    context_signer: MiniAppContextSigner
 
 
 def build_max_dispatcher(
@@ -76,6 +124,10 @@ def build_max_runtime(
 
 
 __all__ = [
+    "KaitenConnectionBinder",
+    "MaxIdentityResolver",
+    "MaxMessageConfirmationSender",
+    "MaxMiniAppRuntime",
     "MaxRuntime",
     "MaxRuntimeConfigurationError",
     "build_max_dispatcher",

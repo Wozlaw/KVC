@@ -38,6 +38,9 @@ kvc-worker = "kvc_worker.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"kvc_api.max" = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = [
