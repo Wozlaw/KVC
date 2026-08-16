@@ -28,9 +28,11 @@ from kvc_integrations.max.errors import (
     MaxMiniAppValidationError,
     MaxTransportError,
     MaxTransportTimeoutError,
+    MaxUpdateParseError,
 )
 from kvc_integrations.max.message_sender import MaxMessageSender
 from kvc_integrations.max.mini_app_validation import validate_init_data
+from kvc_integrations.max.update_parser import SUPPORTED_UPDATE_TYPES, parse_max_update
 
 __all__ = [
     "MAX_MESSAGE_TEXT_LIMIT",
@@ -52,11 +54,14 @@ __all__ = [
     "MaxTextFormat",
     "MaxTransportError",
     "MaxTransportTimeoutError",
+    "MaxUpdateParseError",
     "MiniAppContextClaims",
     "MiniAppContextPurpose",
     "MiniAppContextSigner",
+    "SUPPORTED_UPDATE_TYPES",
     "ValidatedMaxMiniAppChat",
     "ValidatedMaxMiniAppInitData",
     "ValidatedMaxMiniAppUser",
+    "parse_max_update",
     "validate_init_data",
 ]

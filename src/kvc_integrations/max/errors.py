@@ -5,6 +5,10 @@ class MaxIntegrationError(Exception):
     """Base MAX integration error."""
 
 
+class MaxUpdateParseError(MaxIntegrationError):
+    """Raised when a raw MAX update cannot be normalized safely."""
+
+
 class MaxApiError(MaxIntegrationError):
     """Base safe MAX Bot API error."""
 
@@ -123,4 +127,5 @@ __all__ = [
     "MaxMiniAppValidationError",
     "MaxTransportError",
     "MaxTransportTimeoutError",
+    "MaxUpdateParseError",
 ]

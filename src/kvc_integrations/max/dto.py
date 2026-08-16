@@ -35,6 +35,7 @@ class MaxIncomingUpdate:
     message_text: str | None
     message_timestamp: int | None
     callback_payload: str | None
+    start_payload: str | None = None
     attachments: tuple[MaxAttachmentMetadata, ...] = ()
 
 
