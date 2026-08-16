@@ -979,7 +979,7 @@ Message:
 docs: close application service onboarding branch
 ```
 
-The final documentation commit SHA is inherently self-referential and cannot be embedded in this report before the report is committed without changing the commit content and therefore the SHA. The exact final HEAD SHA is recorded in the final assistant response after commit creation.
+The final documentation commit SHA is inherently self-referential and cannot be embedded in this report before the report is committed without changing the commit content and therefore the SHA. The exact final HEAD SHA, clean worktree result, post-commit gate, and final database baseline are recorded in the terminal closeout summary after commit creation.
 
 ## 40. Final branch history
 
@@ -1011,6 +1011,8 @@ The only expected additions after final documentation commit are:
 codex/prompts/003_06_branch_acceptance_git_integration_closeout_prompt.md
 codex/reports/003_06_branch_acceptance_git_integration_closeout_report.md
 ```
+
+Corrective completion note: the original `003-06` prompt and this report were committed in the initial final documentation commit. The later corrective prompt is a same-stage completion artifact and is committed with this report correction without amend/rebase.
 
 No unrelated future work is expected.
 
@@ -1110,3 +1112,15 @@ No `004` branch is created by this closeout.
 ```text
 BRANCH 003 ACCEPTED AND CLOSED - READY FOR NEXT BRANCH
 ```
+
+## Closeout execution note
+
+Final closeout documentation consists of:
+
+```text
+codex/prompts/003_06_branch_acceptance_git_integration_closeout_prompt.md
+codex/prompts/003_06_branch_closeout_completion_correction_prompt.md
+codex/reports/003_06_branch_acceptance_git_integration_closeout_report.md
+```
+
+The final commit SHA cannot be embedded self-referentially in this committed report. Exact final HEAD, clean worktree result, post-commit gate, and final PostgreSQL baseline are reported in the terminal closeout summary after commit creation. This report must not be modified after the final documentation/correction commit.
