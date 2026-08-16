@@ -10,8 +10,10 @@ import pytest
 
 from kvc_api.max import DispatchStatus, MaxServiceCommand, UpdateDispatcher
 from kvc_api.max.dispatcher import WebhookRetryableDispatchError
+from kvc_api.max.service_commands import ServiceCommandHandler
 from kvc_application.dto import IdentityResolution, ResolveMaxIdentityInput
 from kvc_application.errors import IdentityConflict, PersistenceConflict
+from kvc_integrations.max.context_signing import MiniAppContextSigner
 from kvc_integrations.max.dto import MaxIncomingUpdate, MaxSentMessage
 from kvc_integrations.max.errors import MaxApiRateLimitError, MaxApiRecipientError
 
@@ -49,10 +51,17 @@ def non_private_update(chat_type: str) -> MaxIncomingUpdate:
 
 
 class FakeIdentityService:
-    def __init__(self, *, exc: Exception | None = None, user_status: str = "ACTIVE") -> None:
+    def __init__(
+        self,
+        *,
+        exc: Exception | None = None,
+        user_status: str = "ACTIVE",
+        connection_status: str | None = None,
+    ) -> None:
         self.calls: list[ResolveMaxIdentityInput] = []
         self.exc = exc
         self.user_status = user_status
+        self.connection_status = connection_status
 
     async def resolve_or_onboard_private_max_user(
         self,
@@ -66,13 +75,14 @@ class FakeIdentityService:
             max_chat_binding_id=uuid4(),
             user_status="DISABLED" if self.user_status == "DISABLED" else "ACTIVE",
             is_new_user=False,
-            kaiten_connection_status=None,
+            kaiten_connection_status=self.connection_status,  # type: ignore[arg-type]
         )
 
 
 class FakeSender:
     def __init__(self, *, exc: Exception | None = None) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.open_app_calls: list[tuple[str, str, str, str]] = []
         self.exc = exc
 
     async def send_text_to_chat(
@@ -84,6 +94,21 @@ class FakeSender:
         notify: bool = True,
     ) -> MaxSentMessage:
         self.calls.append((chat_id, text))
+        if self.exc is not None:
+            raise self.exc
+        return MaxSentMessage(message_id="mid-out", chat_id=chat_id, timestamp=3)
+
+    async def send_open_app_to_chat(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        context_ref: str,
+        label: str,
+        format: None = None,
+        notify: bool = True,
+    ) -> MaxSentMessage:
+        self.open_app_calls.append((chat_id, text, context_ref, label))
         if self.exc is not None:
             raise self.exc
         return MaxSentMessage(message_id="mid-out", chat_id=chat_id, timestamp=3)
@@ -107,6 +132,19 @@ def dispatcher_with_factory(
     return UpdateDispatcher(
         identity_resolver_factory=identity_factory,
         message_sender=sender,
+        allowed_update_types=("message_created", "message_callback", "bot_started"),
+    )
+
+
+def dispatcher_with_handler(
+    identity: FakeIdentityService,
+    sender: FakeSender,
+    handler: ServiceCommandHandler,
+) -> UpdateDispatcher:
+    return UpdateDispatcher(
+        identity_service=identity,
+        message_sender=sender,
+        service_command_handler=handler,
         allowed_update_types=("message_created", "message_callback", "bot_started"),
     )
 
@@ -260,6 +298,44 @@ async def test_dispatcher_disabled_user_gets_disabled_policy_reply() -> None:
     assert outcome.status is DispatchStatus.RESPONDED
     assert outcome.command is MaxServiceCommand.CONNECT
     assert "отключена" in sender.calls[0][1]
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_connect_uses_open_app_sender_path() -> None:
+    identity = FakeIdentityService()
+    sender = FakeSender()
+    tested_dispatcher = dispatcher_with_handler(
+        identity,
+        sender,
+        ServiceCommandHandler(
+            context_signer=MiniAppContextSigner("synthetic-context-secret"),
+            mini_app_launch_enabled=True,
+            now=lambda: 1_700_000_000,
+        ),
+    )
+
+    outcome = await tested_dispatcher.dispatch(private_update(text="/connect"))
+
+    assert outcome.status is DispatchStatus.RESPONDED
+    assert outcome.command is MaxServiceCommand.CONNECT
+    assert sender.calls == []
+    assert len(sender.open_app_calls) == 1
+    chat_id, text, context_ref, label = sender.open_app_calls[0]
+    assert chat_id == "chat-1"
+    assert text == "Откройте Mini App, чтобы подключить Kaiten."
+    assert label == "Подключить Kaiten"
+    assert "." not in context_ref
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_status_alias_uses_connection_command_text() -> None:
+    identity = FakeIdentityService(connection_status="ACTIVE")
+    sender = FakeSender()
+
+    outcome = await dispatcher(identity, sender).dispatch(private_update(text="/status"))
+
+    assert outcome.command is MaxServiceCommand.CONNECTION
+    assert sender.calls == [("chat-1", "Kaiten подключён. Для замены используйте /reconnect.")]
 
 
 @pytest.mark.asyncio

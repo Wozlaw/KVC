@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from kvc_persistence.repositories import MaxChatRepository, NotificationSettings
 
 EXPECTED_REVISION = "00201_mvp_service_model"
 TOKEN_MARKER = "SYNTHETIC-LONG-POLLING-TOKEN"
+CONTEXT_SECRET = "synthetic-context-secret"
 
 
 @pytest_asyncio.fixture
@@ -75,7 +77,13 @@ async def cleanup_identity_rows(engine: AsyncEngine, prefix: str) -> None:
             await conn.execute(delete(User).where(User.id.in_(user_ids)))
 
 
-def raw_private_update(prefix: str, *, user_suffix: str, chat_suffix: str) -> dict[str, object]:
+def raw_private_update(
+    prefix: str,
+    *,
+    user_suffix: str,
+    chat_suffix: str,
+    text: str = "/start",
+) -> dict[str, object]:
     return {
         "update_type": "message_created",
         "timestamp": 1_700_000_000_000,
@@ -83,7 +91,7 @@ def raw_private_update(prefix: str, *, user_suffix: str, chat_suffix: str) -> di
             "sender": {"user_id": f"{prefix}-user-{user_suffix}"},
             "recipient": {"chat_id": f"{prefix}-chat-{chat_suffix}", "chat_type": "dialog"},
             "timestamp": 1_700_000_000_001,
-            "body": {"mid": "mid-1", "text": "/start"},
+            "body": {"mid": "mid-1", "text": text},
         },
     }
 
@@ -127,6 +135,10 @@ class MockMaxProvider:
     def update_requests(self) -> list[httpx.Request]:
         return [request for request in self.requests if request.url.path == "/updates"]
 
+    @property
+    def message_requests(self) -> list[httpx.Request]:
+        return [request for request in self.requests if request.url.path == "/messages"]
+
 
 @dataclass(frozen=True)
 class LongPollingPgContext:
@@ -154,6 +166,9 @@ async def long_polling_pg_context(
 async def run_scripted_polling(
     context: LongPollingPgContext,
     batches: list[dict[str, object]],
+    *,
+    mini_app_public_url: str | None = None,
+    mini_app_context_secret: SecretStr | None = None,
 ) -> MockMaxProvider:
     provider = MockMaxProvider(batches=batches, requests=[])
     settings = AppSettings(
@@ -162,6 +177,8 @@ async def run_scripted_polling(
         max_allowed_update_types=("message_created", "message_callback", "bot_started"),
         max_polling_limit=100,
         max_polling_timeout_seconds=60,
+        max_mini_app_public_url=mini_app_public_url,
+        max_mini_app_context_secret=mini_app_context_secret,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(provider.handler)) as http_client:
         runtime = build_max_runtime(
@@ -289,3 +306,63 @@ async def test_long_polling_group_update_does_not_create_identity(
         )
         == 0
     )
+
+
+@pytest.mark.asyncio
+async def test_long_polling_connect_uses_same_open_app_command_path(
+    long_polling_pg_context: LongPollingPgContext,
+) -> None:
+    provider = await run_scripted_polling(
+        long_polling_pg_context,
+        [
+            {
+                "updates": [
+                    raw_private_update(
+                        long_polling_pg_context.prefix,
+                        user_suffix="u-connect",
+                        chat_suffix="c-connect",
+                        text="/connect",
+                    )
+                ],
+                "marker": 10,
+            }
+        ],
+        mini_app_public_url="https://max.ru/kvc_bot",
+        mini_app_context_secret=SecretStr(CONTEXT_SECRET),
+    )
+
+    assert len(provider.message_requests) == 1
+    body = json.loads(provider.message_requests[0].content.decode("utf-8"))
+    attachment = body["attachments"][0]
+    web_app = attachment["payload"]["buttons"][0][0]["web_app"]
+    context_ref = str(web_app).split("startapp=", maxsplit=1)[1]
+    assert body["text"] == "Откройте Mini App, чтобы подключить Kaiten."
+    assert attachment["payload"]["buttons"][0][0]["type"] == "open_app"
+    assert "." not in context_ref
+    assert len(context_ref) <= 512
+
+
+@pytest.mark.asyncio
+async def test_long_polling_connection_uses_same_status_command_path(
+    long_polling_pg_context: LongPollingPgContext,
+) -> None:
+    provider = await run_scripted_polling(
+        long_polling_pg_context,
+        [
+            {
+                "updates": [
+                    raw_private_update(
+                        long_polling_pg_context.prefix,
+                        user_suffix="u-status",
+                        chat_suffix="c-status",
+                        text="/connection",
+                    )
+                ],
+                "marker": 10,
+            }
+        ],
+    )
+
+    assert len(provider.message_requests) == 1
+    body = json.loads(provider.message_requests[0].content.decode("utf-8"))
+    assert body["text"] == "Kaiten не подключён. Используйте /connect."

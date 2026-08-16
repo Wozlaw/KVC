@@ -76,6 +76,7 @@ async def cleanup_identity_rows(engine: AsyncEngine, prefix: str) -> None:
 class FakeSender:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.open_app_calls: list[tuple[str, str, str, str]] = []
 
     async def send_text_to_chat(
         self,
@@ -86,6 +87,19 @@ class FakeSender:
         notify: bool = True,
     ) -> MaxSentMessage:
         self.calls.append((chat_id, text))
+        return MaxSentMessage(message_id="mid-out", chat_id=chat_id, timestamp=3)
+
+    async def send_open_app_to_chat(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        context_ref: str,
+        label: str,
+        format: None = None,
+        notify: bool = True,
+    ) -> MaxSentMessage:
+        self.open_app_calls.append((chat_id, text, context_ref, label))
         return MaxSentMessage(message_id="mid-out", chat_id=chat_id, timestamp=3)
 
 

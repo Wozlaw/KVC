@@ -14,6 +14,11 @@ from kvc_api.max.runtime import (
     build_max_dispatcher,
     build_max_runtime,
 )
+from kvc_api.max.service_commands import (
+    ServiceCommandAction,
+    ServiceCommandContext,
+    ServiceCommandHandler,
+)
 from kvc_api.max.webhook import MAX_WEBHOOK_SECRET_HEADER, validate_webhook_secret
 
 __all__ = [
@@ -25,6 +30,9 @@ __all__ = [
     "MaxServiceCommand",
     "MaxRuntime",
     "MaxRuntimeConfigurationError",
+    "ServiceCommandAction",
+    "ServiceCommandContext",
+    "ServiceCommandHandler",
     "UpdateDispatcher",
     "WebhookRetryableDispatchError",
     "build_max_dispatcher",

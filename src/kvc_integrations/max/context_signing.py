@@ -100,9 +100,8 @@ class MiniAppContextSigner:
         )
         self._validate_claims_shape(claims)
         payload = _canonical_payload(claims)
-        encoded_payload = _b64url_encode(payload)
-        signature = hmac.new(self._secret, encoded_payload.encode("ascii"), hashlib.sha256).digest()
-        return f"{encoded_payload}.{_b64url_encode(signature)}"
+        signature = hmac.new(self._secret, payload, hashlib.sha256).digest()
+        return _b64url_encode(payload + signature)
 
     def verify(
         self,
@@ -115,28 +114,28 @@ class MiniAppContextSigner:
     ) -> MiniAppContextClaims:
         """Verify a context token and return trusted claims."""
 
-        segments = token.split(".")
-        if len(segments) != 2 or not segments[0] or not segments[1]:
-            raise MaxMiniAppContextPayloadError("invalid Mini App context token")
-
-        encoded_payload, encoded_signature = segments
-        if not _B64URL_RE.fullmatch(encoded_payload):
+        if not _B64URL_RE.fullmatch(token):
             raise MaxMiniAppContextPayloadError("invalid Mini App context token")
         try:
-            supplied_signature = _b64url_decode(encoded_signature)
+            wire_payload = _b64url_decode(token)
         except ValueError as error:
             raise MaxMiniAppContextPayloadError("invalid Mini App context token") from error
+        if len(wire_payload) <= hashlib.sha256().digest_size:
+            raise MaxMiniAppContextPayloadError("invalid Mini App context token")
+
+        payload_bytes = wire_payload[: -hashlib.sha256().digest_size]
+        supplied_signature = wire_payload[-hashlib.sha256().digest_size :]
 
         expected_signature = hmac.new(
             self._secret,
-            encoded_payload.encode("ascii"),
+            payload_bytes,
             hashlib.sha256,
         ).digest()
         if not hmac.compare_digest(expected_signature, supplied_signature):
             raise MaxMiniAppContextSignatureError("invalid Mini App context signature")
 
         try:
-            payload = json.loads(_b64url_decode(encoded_payload))
+            payload = json.loads(payload_bytes)
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
             raise MaxMiniAppContextPayloadError("invalid Mini App context payload") from error
         claims = _claims_from_payload(payload)

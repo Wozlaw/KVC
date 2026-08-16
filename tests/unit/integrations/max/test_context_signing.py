@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 
 import pytest
 from pydantic import SecretStr
@@ -25,6 +26,7 @@ from kvc_integrations.max.errors import (
 
 SECRET = "synthetic-context-secret"
 NOW = 1_700_000_000
+MAX_STARTAPP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def test_context_signer_valid_round_trip_and_token_size() -> None:
@@ -50,9 +52,32 @@ def test_context_signer_valid_round_trip_and_token_size() -> None:
     assert claims.expires_at == NOW + 900
     assert claims.nonce == "deterministic_nonce"
     assert claims.identity_binding == binding
-    assert len(token) < 512
+    assert MAX_STARTAPP_RE.fullmatch(token)
+    assert 1 <= len(token) <= 512
+    for forbidden in ".=+/%":
+        assert forbidden not in token
     assert SECRET not in repr(signer)
     assert binding not in repr(claims)
+
+
+@pytest.mark.parametrize(
+    "purpose",
+    [MiniAppContextPurpose.CONNECT_KAITEN, MiniAppContextPurpose.RECONNECT_KAITEN],
+)
+def test_representative_connect_context_fits_max_startapp(purpose: MiniAppContextPurpose) -> None:
+    signer = MiniAppContextSigner(SecretStr(SECRET))
+    binding = signer.make_identity_binding(max_user_id="123456789", chat_id="987654321")
+
+    token = signer.issue(
+        purpose=purpose,
+        identity_binding=binding,
+        ttl_seconds=900,
+        now=NOW,
+        nonce="representative_nonce",
+    )
+
+    assert MAX_STARTAPP_RE.fullmatch(token)
+    assert len(token) <= 512
 
 
 def test_context_signer_rejects_payload_tamper() -> None:
@@ -65,12 +90,11 @@ def test_context_signer_rejects_payload_tamper() -> None:
         now=NOW,
         nonce="nonce",
     )
-    payload, signature = token.split(".")
-    tampered_payload = payload[:-1] + ("A" if payload[-1] != "A" else "B")
+    tampered_token = token[:-1] + ("A" if token[-1] != "A" else "B")
 
     with pytest.raises(MaxMiniAppContextSignatureError):
         signer.verify(
-            f"{tampered_payload}.{signature}",
+            tampered_token,
             expected_purpose=MiniAppContextPurpose.CONNECT_KAITEN,
             expected_identity_binding=binding,
             now=NOW,
@@ -208,8 +232,11 @@ def test_context_binding_changes_for_same_user_different_chat() -> None:
     assert first != second
 
 
-@pytest.mark.parametrize("token", ["one", "one.two.three", "!!!!.abcd", "abcd.!!!!"])
-def test_context_signer_rejects_malformed_token_segments(token: str) -> None:
+@pytest.mark.parametrize(
+    "token",
+    ["one", "one.two", "one.two.three", "!!!!", "abcd=", "abcd+", "abcd/", "abcd%"],
+)
+def test_context_signer_rejects_malformed_or_legacy_tokens(token: str) -> None:
     signer = MiniAppContextSigner(SECRET)
 
     with pytest.raises(MaxMiniAppContextPayloadError):
@@ -339,14 +366,12 @@ def test_context_signer_validates_workflow_ref_when_expected() -> None:
 
 def test_context_signer_rejects_invalid_json_payload() -> None:
     signer = MiniAppContextSigner(SECRET)
-    payload = _b64url_encode(b"{bad-json")
-    signature = _b64url_encode(
-        hmac.new(SECRET.encode(), payload.encode("ascii"), hashlib.sha256).digest()
-    )
+    payload = b"{bad-json"
+    signature = hmac.new(SECRET.encode(), payload, hashlib.sha256).digest()
 
     with pytest.raises(MaxMiniAppContextPayloadError):
         signer.verify(
-            f"{payload}.{signature}",
+            _b64url_encode(payload + signature),
             expected_purpose=MiniAppContextPurpose.CONNECT_KAITEN,
             expected_identity_binding="binding",
             now=NOW,
@@ -361,11 +386,8 @@ def _signed_context_token(payload: dict[str, object], secret: str) -> str:
         ensure_ascii=False,
         allow_nan=False,
     ).encode("utf-8")
-    encoded_payload = _b64url_encode(payload_bytes)
-    signature = hmac.new(
-        secret.encode("utf-8"), encoded_payload.encode("ascii"), hashlib.sha256
-    ).digest()
-    return f"{encoded_payload}.{_b64url_encode(signature)}"
+    signature = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).digest()
+    return _b64url_encode(payload_bytes + signature)
 
 
 def _b64url_encode(value: bytes) -> str:

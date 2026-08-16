@@ -8,11 +8,18 @@ from collections.abc import Mapping
 import httpx
 import pytest
 
-from kvc_integrations.max import MAX_MESSAGE_TEXT_LIMIT, MaxBotApiClient, MaxMessageSender
+from kvc_integrations.max import (
+    MAX_MESSAGE_TEXT_LIMIT,
+    MaxBotApiClient,
+    MaxMessageSender,
+    MiniAppContextPurpose,
+    MiniAppContextSigner,
+)
 from kvc_integrations.max.errors import MaxApiRateLimitError, MaxApiRequestError
 
 TOKEN_MARKER = "SYNTHETIC-MAX-TOKEN-MUST-NOT-LEAK"
 CONTEXT_MARKER = "ctx-ABC_123"
+CONTEXT_SECRET = "synthetic-context-secret"
 
 
 def _success_payload() -> dict[str, object]:
@@ -130,6 +137,35 @@ async def test_send_open_app_to_chat_builds_inline_open_app_button() -> None:
     assert TOKEN_MARKER not in encoded_body
     assert "binding" not in encoded_body
     assert "purpose" not in encoded_body
+
+
+@pytest.mark.asyncio
+async def test_send_open_app_to_chat_accepts_current_signed_context_token() -> None:
+    signer = MiniAppContextSigner(CONTEXT_SECRET)
+    context_ref = signer.issue(
+        purpose=MiniAppContextPurpose.CONNECT_KAITEN,
+        identity_binding=signer.make_identity_binding(max_user_id="123", chat_id="456"),
+        ttl_seconds=900,
+        now=1_700_000_000,
+        nonce="sender-regression",
+    )
+    captured: list[tuple[httpx.Request, Mapping[str, object]]] = []
+    http_client, sender = await _sender_with_capture(captured)
+    async with http_client:
+        await sender.send_open_app_to_chat(
+            chat_id="456",
+            text="Connect Kaiten",
+            context_ref=context_ref,
+            label="Open",
+        )
+
+    _, body = captured[0]
+    attachment = body["attachments"][0]  # type: ignore[index]
+    web_app = attachment["payload"]["buttons"][0][0]["web_app"]  # type: ignore[index]
+    assert web_app == f"https://max.ru/kvc_bot?lang=ru&startapp={context_ref}"
+    assert "%2E" not in web_app
+    assert "." not in context_ref
+    assert len(context_ref) <= 512
 
 
 @pytest.mark.asyncio

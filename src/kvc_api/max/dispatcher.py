@@ -12,7 +12,11 @@ from kvc_api.max.command_router import CommandRouter, MaxServiceCommand
 from kvc_api.max.response_text import (
     GROUP_UNSUPPORTED_TEXT,
     IDENTITY_CONFLICT_TEXT,
-    provisional_command_response,
+)
+from kvc_api.max.service_commands import (
+    ServiceCommandAction,
+    ServiceCommandContext,
+    ServiceCommandHandler,
 )
 from kvc_application.dto import IdentityResolution, ResolveMaxIdentityInput
 from kvc_application.errors import IdentityConflict, PersistenceConflict, UserDisabled
@@ -63,6 +67,17 @@ class MessageSender(Protocol):
         notify: bool = True,
     ) -> MaxSentMessage: ...
 
+    async def send_open_app_to_chat(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        context_ref: str,
+        label: str,
+        format: None = None,
+        notify: bool = True,
+    ) -> MaxSentMessage: ...
+
 
 class UpdateDispatcher:
     """Dispatch normalized MAX updates through identity and command boundaries."""
@@ -74,6 +89,7 @@ class UpdateDispatcher:
         identity_resolver_factory: IdentityResolverFactory | None = None,
         message_sender: MessageSender,
         command_router: CommandRouter | None = None,
+        service_command_handler: ServiceCommandHandler | None = None,
         allowed_update_types: tuple[str, ...],
     ) -> None:
         if (identity_service is None) == (identity_resolver_factory is None):
@@ -85,6 +101,7 @@ class UpdateDispatcher:
             self._identity_resolver_factory = lambda: identity_service
         self._message_sender = message_sender
         self._command_router = command_router or CommandRouter()
+        self._service_command_handler = service_command_handler or ServiceCommandHandler()
         self._allowed_update_types = frozenset(allowed_update_types)
         self._lock_guard = asyncio.Lock()
         self._locks: dict[str, asyncio.Lock] = {}
@@ -147,11 +164,15 @@ class UpdateDispatcher:
                 identity_resolved=True,
             )
 
-        text = provisional_command_response(
-            command,
-            disabled=identity.user_status == "DISABLED",
+        action = await self._service_command_handler.handle(
+            ServiceCommandContext(
+                command=command,
+                identity=identity,
+                max_user_id=update.max_user_id,
+                max_chat_id=chat_id,
+            )
         )
-        status = await self._send_with_policy(chat_id, text)
+        status = await self._send_action_with_policy(chat_id, action)
         return DispatchOutcome(
             status=status,
             update_type=update.update_type,
@@ -169,14 +190,34 @@ class UpdateDispatcher:
             return None
         return None
 
-    async def _send_with_policy(self, chat_id: str, text: str) -> DispatchStatus:
+    async def _send_action_with_policy(
+        self,
+        chat_id: str,
+        action: ServiceCommandAction,
+    ) -> DispatchStatus:
         try:
-            await self._message_sender.send_text_to_chat(chat_id=chat_id, text=text)
+            if action.kind == "open_app":
+                assert action.context_ref is not None
+                assert action.label is not None
+                await self._message_sender.send_open_app_to_chat(
+                    chat_id=chat_id,
+                    text=action.text,
+                    context_ref=action.context_ref,
+                    label=action.label,
+                )
+            else:
+                await self._message_sender.send_text_to_chat(chat_id=chat_id, text=action.text)
         except MaxApiError as exc:
             if exc.retryable:
                 raise WebhookRetryableDispatchError("MAX outbound retryable failure") from exc
             return DispatchStatus.OUTBOUND_NON_RETRYABLE_FAILURE
         return DispatchStatus.RESPONDED
+
+    async def _send_with_policy(self, chat_id: str, text: str) -> DispatchStatus:
+        return await self._send_action_with_policy(
+            chat_id,
+            ServiceCommandAction.text_reply(text),
+        )
 
     async def _acquire_lock(self, chat_id: str) -> asyncio.Lock:
         async with self._lock_guard:
