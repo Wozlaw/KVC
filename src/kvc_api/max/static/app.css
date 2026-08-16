@@ -103,6 +103,55 @@ input:focus {
   accent-color: #1f7a66;
 }
 
+.option-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.option-row {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #c8ced8;
+  border-radius: 8px;
+  background: #ffffff;
+  font-weight: 500;
+}
+
+.option-row input {
+  width: 20px;
+  min-height: 20px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: #1f7a66;
+}
+
+.option-label,
+.option-description {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.option-label {
+  color: #1b1f27;
+  font-weight: 650;
+}
+
+.option-description {
+  margin-top: 4px;
+  color: #566070;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 button {
   min-height: 48px;
   border: 0;

@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Protocol
+from uuid import UUID
 
-from kvc_application.dto import EncryptedToken, KaitenCredentialVerification
+from kvc_application.dto import (
+    ContextInteractionResult,
+    ContextInteractionView,
+    EncryptedToken,
+    KaitenCredentialVerification,
+)
 
 
 class TokenCipher(Protocol):
@@ -33,8 +39,35 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+class ContextInteractionResolver(Protocol):
+    """Application-facing resolver for bounded contextual single-choice flows."""
+
+    async def get_interaction(
+        self,
+        *,
+        user_id: UUID,
+        workflow_ref: str,
+    ) -> ContextInteractionView: ...
+
+    async def submit_selection(
+        self,
+        *,
+        user_id: UUID,
+        workflow_ref: str,
+        option_id: str,
+    ) -> ContextInteractionResult: ...
+
+    async def cancel_interaction(
+        self,
+        *,
+        user_id: UUID,
+        workflow_ref: str,
+    ) -> ContextInteractionResult: ...
+
+
 __all__ = [
     "Clock",
+    "ContextInteractionResolver",
     "KaitenCredentialVerifier",
     "TokenCipher",
 ]

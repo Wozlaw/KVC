@@ -21,6 +21,7 @@ from kvc_application.dto import (
     ResolveMaxIdentityInput,
     UpdateNotificationSettingsInput,
 )
+from kvc_application.ports import ContextInteractionResolver
 from kvc_application.services import IdentityService, KaitenConnectionService
 from kvc_config import AppSettings
 from kvc_integrations.kaiten import KaitenHttpCredentialVerifier
@@ -92,6 +93,7 @@ class MaxMiniAppRuntime:
     message_sender: MaxMessageConfirmationSender
     context_signer: MiniAppContextSigner
     notification_settings_service_factory: Callable[[], NotificationSettingsManager] | None = None
+    context_interaction_resolver_factory: Callable[[], ContextInteractionResolver] | None = None
 
 
 def build_max_dispatcher(

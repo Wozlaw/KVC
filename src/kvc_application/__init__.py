@@ -1,8 +1,21 @@
 """Application layer package for Kaiten Voice Control."""
 
 from kvc_application.dto import (
+    CONTEXT_INTERACTION_MAX_DESCRIPTION_LENGTH,
+    CONTEXT_INTERACTION_MAX_LABEL_LENGTH,
+    CONTEXT_INTERACTION_MAX_OPTION_ID_LENGTH,
+    CONTEXT_INTERACTION_MAX_OPTIONS,
+    CONTEXT_INTERACTION_MAX_PROMPT_LENGTH,
+    CONTEXT_INTERACTION_MAX_RESULT_MESSAGE_LENGTH,
+    CONTEXT_INTERACTION_MAX_TITLE_LENGTH,
+    CONTEXT_INTERACTION_MAX_WORKFLOW_REF_LENGTH,
+    CONTEXT_INTERACTION_WORKFLOW_REF_PATTERN,
     ActiveKaitenConnectionSecret,
     BindKaitenConnectionInput,
+    ContextInteractionOption,
+    ContextInteractionResult,
+    ContextInteractionStatus,
+    ContextInteractionView,
     EncryptedToken,
     IdentityResolution,
     KaitenConnectionResult,
@@ -15,9 +28,14 @@ from kvc_application.dto import (
     ResolveMaxIdentityInput,
     UpdateNotificationSettingsInput,
     UserStatus,
+    validate_context_interaction_workflow_ref,
 )
 from kvc_application.errors import (
     ApplicationError,
+    ContextInteractionAlreadyCompleted,
+    ContextInteractionExpired,
+    ContextInteractionInvalidSelection,
+    ContextInteractionMissing,
     CredentialDecryptionFailed,
     CredentialEncryptionFailed,
     IdentityConflict,
@@ -31,14 +49,37 @@ from kvc_application.errors import (
     PersistenceConflict,
     UserDisabled,
 )
-from kvc_application.ports import Clock, KaitenCredentialVerifier, TokenCipher
+from kvc_application.ports import (
+    Clock,
+    ContextInteractionResolver,
+    KaitenCredentialVerifier,
+    TokenCipher,
+)
 from kvc_application.services import IdentityService, KaitenConnectionService
 
 __all__ = [
     "ActiveKaitenConnectionSecret",
     "ApplicationError",
     "BindKaitenConnectionInput",
+    "CONTEXT_INTERACTION_MAX_DESCRIPTION_LENGTH",
+    "CONTEXT_INTERACTION_MAX_LABEL_LENGTH",
+    "CONTEXT_INTERACTION_MAX_OPTION_ID_LENGTH",
+    "CONTEXT_INTERACTION_MAX_OPTIONS",
+    "CONTEXT_INTERACTION_MAX_PROMPT_LENGTH",
+    "CONTEXT_INTERACTION_MAX_RESULT_MESSAGE_LENGTH",
+    "CONTEXT_INTERACTION_MAX_TITLE_LENGTH",
+    "CONTEXT_INTERACTION_MAX_WORKFLOW_REF_LENGTH",
+    "CONTEXT_INTERACTION_WORKFLOW_REF_PATTERN",
     "Clock",
+    "ContextInteractionAlreadyCompleted",
+    "ContextInteractionExpired",
+    "ContextInteractionInvalidSelection",
+    "ContextInteractionMissing",
+    "ContextInteractionOption",
+    "ContextInteractionResolver",
+    "ContextInteractionResult",
+    "ContextInteractionStatus",
+    "ContextInteractionView",
     "CredentialDecryptionFailed",
     "CredentialEncryptionFailed",
     "EncryptedToken",
@@ -67,4 +108,5 @@ __all__ = [
     "UpdateNotificationSettingsInput",
     "UserDisabled",
     "UserStatus",
+    "validate_context_interaction_workflow_ref",
 ]

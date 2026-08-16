@@ -53,8 +53,28 @@ class InvalidNotificationSettings(ApplicationError):
     """Raised when notification settings input violates the application contract."""
 
 
+class ContextInteractionMissing(ApplicationError):
+    """Raised when a contextual interaction cannot be found for the workflow."""
+
+
+class ContextInteractionExpired(ApplicationError):
+    """Raised when a contextual interaction can no longer accept input."""
+
+
+class ContextInteractionInvalidSelection(ApplicationError):
+    """Raised when a submitted contextual interaction option is invalid."""
+
+
+class ContextInteractionAlreadyCompleted(ApplicationError):
+    """Raised when a contextual interaction has already reached a terminal state."""
+
+
 __all__ = [
     "ApplicationError",
+    "ContextInteractionAlreadyCompleted",
+    "ContextInteractionExpired",
+    "ContextInteractionInvalidSelection",
+    "ContextInteractionMissing",
     "CredentialDecryptionFailed",
     "CredentialEncryptionFailed",
     "IdentityConflict",

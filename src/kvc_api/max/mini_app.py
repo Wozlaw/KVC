@@ -19,12 +19,22 @@ from starlette.staticfiles import StaticFiles
 from kvc_api.max.response_text import NOTIFICATIONS_SAVED_TEXT
 from kvc_api.max.runtime import MaxMiniAppRuntime
 from kvc_application.dto import (
+    CONTEXT_INTERACTION_MAX_OPTION_ID_LENGTH,
+    CONTEXT_INTERACTION_MAX_RESULT_MESSAGE_LENGTH,
     BindKaitenConnectionInput,
+    ContextInteractionOption,
+    ContextInteractionResult,
+    ContextInteractionView,
     NotificationSettingsResult,
     ResolveMaxIdentityInput,
     UpdateNotificationSettingsInput,
+    validate_context_interaction_workflow_ref,
 )
 from kvc_application.errors import (
+    ContextInteractionAlreadyCompleted,
+    ContextInteractionExpired,
+    ContextInteractionInvalidSelection,
+    ContextInteractionMissing,
     CredentialEncryptionFailed,
     IdentityConflict,
     InvalidNotificationSettings,
@@ -52,8 +62,12 @@ MAX_MINI_APP_CONNECT_PATH = "/max/app/connect"
 MAX_MINI_APP_CONNECT_API_PATH = "/max/app/api/connect"
 MAX_MINI_APP_NOTIFICATIONS_PATH = "/max/app/notifications"
 MAX_MINI_APP_NOTIFICATIONS_API_PATH = "/max/app/api/notifications"
+MAX_MINI_APP_CONTEXT_PATH = "/max/app/context"
+MAX_MINI_APP_CONTEXT_API_PATH = "/max/app/api/context"
+MAX_MINI_APP_CONTEXT_CANCEL_API_PATH = "/max/app/api/context/cancel"
 MAX_MINI_APP_INIT_DATA_MAX_AGE_SECONDS = 900
 MAX_MINI_APP_NOTIFICATIONS_INIT_DATA_MAX_AGE_SECONDS = 3600
+MAX_MINI_APP_CONTEXT_INIT_DATA_MAX_AGE_SECONDS = 3600
 MAX_KAITEN_TOKEN_MAX_LENGTH = 8192
 MAX_KAITEN_API_BASE_URL_LENGTH = 2048
 MAX_CONTEXT_REF_MAX_LENGTH = 512
@@ -120,6 +134,10 @@ def create_max_mini_app_router(
     @router.get(MAX_MINI_APP_NOTIFICATIONS_PATH)
     async def notifications_page() -> Response:
         return _html_response(_notifications_html())
+
+    @router.get(MAX_MINI_APP_CONTEXT_PATH)
+    async def context_page() -> Response:
+        return _html_response(_context_html())
 
     @router.post(MAX_MINI_APP_CONNECT_API_PATH)
     async def connect_api(request: Request) -> Response:
@@ -331,6 +349,134 @@ def create_max_mini_app_router(
             status_code=200,
         )
 
+    @router.get(MAX_MINI_APP_CONTEXT_API_PATH)
+    async def get_context_api(request: Request) -> Response:
+        trust = await _validated_context_interaction_trust(
+            request=request,
+            settings=settings,
+            runtime=runtime,
+        )
+        if isinstance(trust, Response):
+            return trust
+
+        assert runtime is not None
+        assert runtime.context_interaction_resolver_factory is not None
+        resolver = runtime.context_interaction_resolver_factory()
+        try:
+            view = await resolver.get_interaction(
+                user_id=trust.user_id,
+                workflow_ref=trust.workflow_ref,
+            )
+            payload = _context_interaction_view_payload(
+                view,
+                expected_workflow_ref=trust.workflow_ref,
+            )
+        except ContextInteractionMissing:
+            return _json_response({"status": "interaction_missing"}, status_code=404)
+        except ContextInteractionExpired:
+            return _json_response({"status": "interaction_expired"}, status_code=409)
+        except ContextInteractionAlreadyCompleted:
+            return _json_response({"status": "interaction_completed"}, status_code=409)
+        except PersistenceConflict:
+            return _json_response({"status": "temporary_failure"}, status_code=503)
+        except ValueError:
+            return _json_response({"status": "invalid_interaction"}, status_code=503)
+        return _json_response(payload, status_code=200)
+
+    @router.post(MAX_MINI_APP_CONTEXT_API_PATH)
+    async def post_context_api(request: Request) -> Response:
+        trust = await _validated_context_interaction_trust(
+            request=request,
+            settings=settings,
+            runtime=runtime,
+        )
+        if isinstance(trust, Response):
+            return trust
+
+        try:
+            payload = await request.json()
+        except JSONDecodeError:
+            return _json_response({"status": "invalid_json"}, status_code=400)
+        if not isinstance(payload, dict) or set(payload) != {"selected_option_id"}:
+            return _json_response({"status": "invalid_selection"}, status_code=400)
+        try:
+            option_id = _required_string(
+                payload,
+                "selected_option_id",
+                max_length=CONTEXT_INTERACTION_MAX_OPTION_ID_LENGTH,
+            )
+        except ValueError:
+            return _json_response({"status": "invalid_selection"}, status_code=400)
+
+        assert runtime is not None
+        assert runtime.context_interaction_resolver_factory is not None
+        resolver = runtime.context_interaction_resolver_factory()
+        try:
+            result = await resolver.submit_selection(
+                user_id=trust.user_id,
+                workflow_ref=trust.workflow_ref,
+                option_id=option_id,
+            )
+            response_payload = await _context_interaction_result_payload(
+                result,
+                chat_id=trust.chat_id,
+                runtime=runtime,
+            )
+        except ContextInteractionInvalidSelection:
+            return _json_response({"status": "invalid_selection"}, status_code=400)
+        except ContextInteractionMissing:
+            return _json_response({"status": "interaction_missing"}, status_code=404)
+        except ContextInteractionExpired:
+            return _json_response({"status": "interaction_expired"}, status_code=409)
+        except ContextInteractionAlreadyCompleted:
+            return _json_response({"status": "interaction_completed"}, status_code=409)
+        except UserDisabled:
+            return _json_response({"status": "user_disabled"}, status_code=403)
+        except PersistenceConflict:
+            return _json_response({"status": "temporary_failure"}, status_code=503)
+        except ValueError:
+            return _json_response({"status": "invalid_interaction"}, status_code=503)
+        return _json_response(response_payload, status_code=200)
+
+    @router.post(MAX_MINI_APP_CONTEXT_CANCEL_API_PATH)
+    async def cancel_context_api(request: Request) -> Response:
+        trust = await _validated_context_interaction_trust(
+            request=request,
+            settings=settings,
+            runtime=runtime,
+        )
+        if isinstance(trust, Response):
+            return trust
+
+        assert runtime is not None
+        assert runtime.context_interaction_resolver_factory is not None
+        resolver = runtime.context_interaction_resolver_factory()
+        try:
+            result = await resolver.cancel_interaction(
+                user_id=trust.user_id,
+                workflow_ref=trust.workflow_ref,
+            )
+            response_payload = await _context_interaction_result_payload(
+                result,
+                chat_id=trust.chat_id,
+                runtime=runtime,
+            )
+        except ContextInteractionInvalidSelection:
+            return _json_response({"status": "invalid_selection"}, status_code=400)
+        except ContextInteractionMissing:
+            return _json_response({"status": "interaction_missing"}, status_code=404)
+        except ContextInteractionExpired:
+            return _json_response({"status": "interaction_expired"}, status_code=409)
+        except ContextInteractionAlreadyCompleted:
+            return _json_response({"status": "interaction_completed"}, status_code=409)
+        except UserDisabled:
+            return _json_response({"status": "user_disabled"}, status_code=403)
+        except PersistenceConflict:
+            return _json_response({"status": "temporary_failure"}, status_code=503)
+        except ValueError:
+            return _json_response({"status": "invalid_interaction"}, status_code=503)
+        return _json_response(response_payload, status_code=200)
+
     return router
 
 
@@ -338,6 +484,13 @@ def create_max_mini_app_router(
 class _NotificationTrust:
     user_id: UUID
     chat_id: str
+
+
+@dataclass(frozen=True)
+class _ContextInteractionTrust:
+    user_id: UUID
+    chat_id: str
+    workflow_ref: str
 
 
 def _verify_allowed_context(
@@ -437,6 +590,88 @@ async def _validated_notification_trust(
     return _NotificationTrust(user_id=identity.user_id, chat_id=launch.chat_id)
 
 
+async def _validated_context_interaction_trust(
+    *,
+    request: Request,
+    settings: AppSettings,
+    runtime: MaxMiniAppRuntime | None,
+) -> _ContextInteractionTrust | Response:
+    if settings.max_bot_token is None or settings.max_mini_app_context_secret is None:
+        return _json_response({"status": "configuration_error"}, status_code=503)
+    if runtime is None or runtime.context_interaction_resolver_factory is None:
+        return _json_response({"status": "interaction_unavailable"}, status_code=503)
+
+    try:
+        init_data = _required_header(
+            request,
+            MAX_INIT_DATA_HEADER,
+            max_length=8192,
+        )
+        context_ref = _required_header(
+            request,
+            MAX_MINI_APP_CONTEXT_HEADER,
+            max_length=MAX_CONTEXT_REF_MAX_LENGTH,
+        )
+    except ValueError:
+        return _json_response({"status": "invalid_launch"}, status_code=403)
+
+    try:
+        launch = validate_init_data(
+            init_data,
+            bot_token=settings.max_bot_token,
+            max_age_seconds=MAX_MINI_APP_CONTEXT_INIT_DATA_MAX_AGE_SECONDS,
+        )
+    except MaxMiniAppFreshnessError:
+        return _json_response({"status": "expired_launch"}, status_code=409)
+    except (MaxMiniAppPayloadError, MaxMiniAppSignatureError):
+        return _json_response({"status": "invalid_launch"}, status_code=403)
+
+    if launch.chat_type != "PRIVATE" or launch.chat_id is None:
+        return _json_response({"status": "private_chat_required"}, status_code=403)
+    if launch.start_param is not None and launch.start_param != context_ref:
+        return _json_response({"status": "invalid_context"}, status_code=403)
+
+    identity_binding = runtime.context_signer.make_identity_binding(
+        max_user_id=launch.max_user_id,
+        chat_id=launch.chat_id,
+    )
+    try:
+        claims = runtime.context_signer.verify(
+            context_ref,
+            expected_purpose=MiniAppContextPurpose.SYNTHETIC_CONTEXT,
+            expected_identity_binding=identity_binding,
+            now=int(time.time()),
+        )
+        if claims.workflow_ref is None:
+            raise MaxMiniAppContextError("missing Mini App context workflow")
+        workflow_ref = validate_context_interaction_workflow_ref(claims.workflow_ref)
+    except MaxMiniAppContextExpiredError:
+        return _json_response({"status": "expired_context"}, status_code=409)
+    except (MaxMiniAppContextError, ValueError):
+        return _json_response({"status": "invalid_context"}, status_code=403)
+
+    try:
+        identity = await runtime.identity_resolver_factory().resolve_or_onboard_private_max_user(
+            ResolveMaxIdentityInput(
+                max_user_id=launch.max_user_id,
+                max_chat_id=launch.chat_id,
+                chat_type="PRIVATE",
+            )
+        )
+    except IdentityConflict:
+        return _json_response({"status": "identity_conflict"}, status_code=409)
+    except PersistenceConflict:
+        return _json_response({"status": "temporary_failure"}, status_code=503)
+
+    if identity.user_status == "DISABLED":
+        return _json_response({"status": "user_disabled"}, status_code=403)
+    return _ContextInteractionTrust(
+        user_id=identity.user_id,
+        chat_id=launch.chat_id,
+        workflow_ref=workflow_ref,
+    )
+
+
 def _mode_for_purpose(purpose: MiniAppContextPurpose) -> str:
     if purpose is MiniAppContextPurpose.RECONNECT_KAITEN:
         return "reconnected"
@@ -522,6 +757,60 @@ def _settings_payload(result: NotificationSettingsResult) -> dict[str, object]:
         "enabled": result.enabled,
         "due_soon_days": result.due_soon_days,
         "timezone": result.timezone,
+    }
+
+
+def _context_interaction_view_payload(
+    view: ContextInteractionView,
+    *,
+    expected_workflow_ref: str,
+) -> dict[str, object]:
+    if not isinstance(view, ContextInteractionView):
+        raise ValueError("invalid context interaction view")
+    if view.workflow_ref != expected_workflow_ref:
+        raise ValueError("context interaction workflow mismatch")
+    return {
+        "title": view.title,
+        "prompt": view.prompt,
+        "options": [_context_interaction_option_payload(option) for option in view.options],
+        "allow_cancel": view.allow_cancel,
+    }
+
+
+def _context_interaction_option_payload(
+    option: ContextInteractionOption,
+) -> dict[str, object]:
+    return {
+        "id": option.option_id,
+        "label": option.label,
+        "description": option.description,
+    }
+
+
+async def _context_interaction_result_payload(
+    result: ContextInteractionResult,
+    *,
+    chat_id: str,
+    runtime: MaxMiniAppRuntime,
+) -> dict[str, object]:
+    if not isinstance(result, ContextInteractionResult):
+        raise ValueError("invalid context interaction result")
+    confirmation_status = "not_required"
+    if result.message is not None:
+        if len(result.message) > CONTEXT_INTERACTION_MAX_RESULT_MESSAGE_LENGTH:
+            raise ValueError("context interaction message is too long")
+        confirmation_status = "sent"
+        try:
+            await runtime.message_sender.send_text_to_chat(
+                chat_id=chat_id,
+                text=result.message,
+                notify=True,
+            )
+        except MaxApiError:
+            confirmation_status = "failed"
+    return {
+        "status": result.status,
+        "confirmation_status": confirmation_status,
     }
 
 
@@ -639,10 +928,44 @@ def _notifications_html() -> str:
 """
 
 
+def _context_html() -> str:
+    return f"""<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KVC</title>
+  <link rel="stylesheet" href="{MAX_MINI_APP_STATIC_PATH}/app.css">
+  <script src="{MAX_BRIDGE_SCRIPT_URL}" defer></script>
+  <script src="{MAX_MINI_APP_STATIC_PATH}/context.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel" aria-labelledby="context-title">
+      <div class="mark" aria-hidden="true">K</div>
+      <h1 id="context-title">Выбор действия</h1>
+      <p id="context-prompt" class="summary">Загрузка...</p>
+      <form id="context-form" autocomplete="off" novalidate>
+        <fieldset id="context-options" class="option-list" disabled></fieldset>
+        <button id="continue-button" type="submit" disabled>Продолжить</button>
+      </form>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <button id="cancel-button" class="secondary" type="button" hidden>Отменить</button>
+      <button id="return-button" class="secondary" type="button">Вернуться</button>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 __all__ = [
     "MAX_MINI_APP_CONNECT_API_PATH",
     "MAX_MINI_APP_CONNECT_PATH",
+    "MAX_MINI_APP_CONTEXT_API_PATH",
+    "MAX_MINI_APP_CONTEXT_CANCEL_API_PATH",
     "MAX_MINI_APP_CONTEXT_HEADER",
+    "MAX_MINI_APP_CONTEXT_PATH",
     "MAX_MINI_APP_NOTIFICATIONS_API_PATH",
     "MAX_MINI_APP_NOTIFICATIONS_PATH",
     "MAX_INIT_DATA_HEADER",
