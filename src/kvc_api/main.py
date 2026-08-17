@@ -1,4 +1,7 @@
-"""ASGI application shell."""
+"""Test-friendly ASGI application shell."""
+
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -28,11 +31,12 @@ def create_app(
     *,
     max_dispatcher: UpdateDispatcher | None = None,
     max_mini_app_runtime: MaxMiniAppRuntime | None = None,
+    lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
     """Create the FastAPI application without opening external connections."""
 
     app_settings = settings or get_settings()
-    app = FastAPI(title=app_settings.service_name)
+    app = FastAPI(title=app_settings.service_name, lifespan=lifespan)
     app.include_router(create_max_router(settings=app_settings, dispatcher=max_dispatcher))
     app.include_router(
         create_max_mini_app_router(
@@ -51,6 +55,3 @@ def create_app(
         return HealthResponse(status="ok", service=SERVICE_NAME)
 
     return app
-
-
-app = create_app()

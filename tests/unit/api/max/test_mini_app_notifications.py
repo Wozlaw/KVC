@@ -385,7 +385,9 @@ def test_service_user_disabled_and_persistence_errors_map_safely() -> None:
 def test_runtime_or_configuration_missing_is_safe() -> None:
     context_ref = _context_ref()
     no_runtime = TestClient(create_app(_settings()))
-    no_secret = TestClient(create_app(AppSettings(max_bot_token=SecretStr(BOT_TOKEN))))
+    no_secret = TestClient(
+        create_app(AppSettings(_env_file=None, max_bot_token=SecretStr(BOT_TOKEN)))
+    )
 
     first = no_runtime.get("/max/app/api/notifications", headers=_headers(context_ref))
     second = no_secret.get("/max/app/api/notifications", headers=_headers(context_ref))

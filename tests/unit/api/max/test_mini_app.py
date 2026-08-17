@@ -400,7 +400,7 @@ def test_confirmation_failure_does_not_rollback_success_or_retry() -> None:
 
 def test_post_without_runtime_or_required_secrets_is_unavailable_without_leak() -> None:
     client_without_runtime = TestClient(create_app(_settings()))
-    client_without_secrets = TestClient(create_app(AppSettings()))
+    client_without_secrets = TestClient(create_app(AppSettings(_env_file=None)))
 
     first = client_without_runtime.post("/max/app/api/connect", json=_valid_body())
     second = client_without_secrets.post("/max/app/api/connect", json=_valid_body())

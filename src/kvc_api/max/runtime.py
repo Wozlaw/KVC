@@ -22,7 +22,11 @@ from kvc_application.dto import (
     UpdateNotificationSettingsInput,
 )
 from kvc_application.ports import ContextInteractionResolver
-from kvc_application.services import IdentityService, KaitenConnectionService
+from kvc_application.services import (
+    IdentityService,
+    KaitenConnectionService,
+    NotificationSettingsService,
+)
 from kvc_config import AppSettings
 from kvc_integrations.kaiten import KaitenHttpCredentialVerifier
 from kvc_integrations.max import MaxBotApiClient, MaxMessageSender, MiniAppContextSigner
@@ -140,26 +144,11 @@ def build_max_runtime(
         api_client,
         mini_app_public_url=settings.max_mini_app_public_url,
     )
-    context_signer = (
-        None
-        if settings.max_mini_app_context_secret is None
-        else MiniAppContextSigner(settings.max_mini_app_context_secret)
-    )
-    token_cipher = None
-    if (
-        settings.token_encryption_active_version is not None
-        and settings.token_encryption_keys is not None
-    ):
-        token_cipher = build_token_cipher(settings)
-    kaiten_connection_service_factory = (
-        None
-        if token_cipher is None
-        else lambda: KaitenConnectionService(
-            sessionmaker,
-            KaitenHttpCredentialVerifier(http_client),
-            token_cipher,
-            UtcClock(),
-        )
+    context_signer = _build_context_signer_or_none(settings)
+    kaiten_connection_service_factory = _build_kaiten_connection_service_factory_or_none(
+        settings=settings,
+        http_client=http_client,
+        sessionmaker=sessionmaker,
     )
     dispatcher = build_max_dispatcher(
         sessionmaker=sessionmaker,
@@ -178,6 +167,68 @@ def build_max_runtime(
     )
 
 
+def build_max_mini_app_runtime(
+    *,
+    settings: AppSettings,
+    http_client: httpx.AsyncClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    message_sender: MaxMessageConfirmationSender,
+    context_interaction_resolver_factory: Callable[[], ContextInteractionResolver] | None = None,
+) -> MaxMiniAppRuntime:
+    """Build real MAX Mini App runtime dependencies for production composition."""
+
+    context_signer = _build_context_signer_or_none(settings)
+    if context_signer is None:
+        raise MaxRuntimeConfigurationError(
+            "KVC_MAX_MINI_APP_CONTEXT_SECRET is required for MAX Mini App runtime."
+        )
+    kaiten_connection_service_factory = _build_kaiten_connection_service_factory_or_none(
+        settings=settings,
+        http_client=http_client,
+        sessionmaker=sessionmaker,
+    )
+    if kaiten_connection_service_factory is None:
+        raise MaxRuntimeConfigurationError(
+            "KVC_TOKEN_ENCRYPTION_ACTIVE_VERSION and KVC_TOKEN_ENCRYPTION_KEYS are required "
+            "for MAX Mini App runtime."
+        )
+
+    return MaxMiniAppRuntime(
+        identity_resolver_factory=lambda: IdentityService(sessionmaker),
+        kaiten_connection_binder_factory=kaiten_connection_service_factory,
+        message_sender=message_sender,
+        context_signer=context_signer,
+        notification_settings_service_factory=lambda: NotificationSettingsService(sessionmaker),
+        context_interaction_resolver_factory=context_interaction_resolver_factory,
+    )
+
+
+def _build_context_signer_or_none(settings: AppSettings) -> MiniAppContextSigner | None:
+    if settings.max_mini_app_context_secret is None:
+        return None
+    return MiniAppContextSigner(settings.max_mini_app_context_secret)
+
+
+def _build_kaiten_connection_service_factory_or_none(
+    *,
+    settings: AppSettings,
+    http_client: httpx.AsyncClient,
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> Callable[[], KaitenConnectionService] | None:
+    if settings.token_encryption_active_version is None or settings.token_encryption_keys is None:
+        return None
+    try:
+        token_cipher = build_token_cipher(settings)
+    except ValueError as exc:
+        raise MaxRuntimeConfigurationError(str(exc)) from exc
+    return lambda: KaitenConnectionService(
+        sessionmaker,
+        KaitenHttpCredentialVerifier(http_client),
+        token_cipher,
+        UtcClock(),
+    )
+
+
 __all__ = [
     "KaitenConnectionBinder",
     "MaxIdentityResolver",
@@ -185,6 +236,7 @@ __all__ = [
     "MaxMiniAppRuntime",
     "MaxRuntime",
     "MaxRuntimeConfigurationError",
+    "build_max_mini_app_runtime",
     "build_max_dispatcher",
     "build_max_runtime",
 ]

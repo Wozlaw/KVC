@@ -538,7 +538,9 @@ def test_branch_004_route_headers_cors_and_missing_config_acceptance() -> None:
         assert "X-Frame-Options" not in response.headers
         assert "Access-Control-Allow-Origin" not in response.headers
 
-    no_secret_client = TestClient(create_app(AppSettings(max_bot_token=SecretStr(BOT_TOKEN))))
+    no_secret_client = TestClient(
+        create_app(AppSettings(_env_file=None, max_bot_token=SecretStr(BOT_TOKEN)))
+    )
     context_ref = context_ref_for(
         "max-user",
         "max-chat",

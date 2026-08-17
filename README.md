@@ -44,7 +44,7 @@ Real secrets must be supplied through environment variables or a local `.env` fi
 ## Run Locally
 
 ```powershell
-python -m hypercorn kvc_api.main:app --bind 127.0.0.1:8000
+python -m hypercorn kvc_api.asgi:app --bind 127.0.0.1:8000
 ```
 
 Health check:
