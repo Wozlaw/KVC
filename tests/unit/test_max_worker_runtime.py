@@ -56,7 +56,10 @@ async def test_long_polling_worker_requires_long_polling_mode() -> None:
 @pytest.mark.asyncio
 async def test_long_polling_worker_requires_bot_token() -> None:
     with pytest.raises(WorkerConfigurationError) as caught:
-        await run_long_polling_worker(AppSettings(max_inbound_mode="long_polling"), max_cycles=0)
+        await run_long_polling_worker(
+            AppSettings(_env_file=None, max_inbound_mode="long_polling"),
+            max_cycles=0,
+        )
 
     assert "KVC_MAX_BOT_TOKEN" in str(caught.value)
 
